@@ -4,6 +4,8 @@ import re
 import copy
 from pytorch_pretrained_bert import BertTokenizer
 import torch
+import copy
+from data_loader import id2tag
 
 def cutData(originPath, trainPath, validPath, scale=0.9):
 
@@ -59,13 +61,12 @@ def stop_words(x):
 
 def acquireEntity(sentenceArr, tagArr, config):
     entityArr, entity = [], ''
-    tokenizer = BertTokenizer.from_pretrained(config['model']['bert_base_chinese'], do_lower_case=True)
-    sentenceArr = [tokenizer.convert_ids_to_tokens(sentence) for sentence in sentenceArr]
-
+    #print (tagArr)
     for i in range(len(tagArr)):
         for j in range(len(tagArr[i])):
             if tagArr[i][j] == 'B':
                 if entity != '':entityArr.append(entity); entity = sentenceArr[i][j]
+                else: entity += sentenceArr[i][j]
             if tagArr[i][j] == 'I':
                 if entity != '': entity = entity + sentenceArr[i][j];
 
@@ -74,8 +75,6 @@ def acquireEntity(sentenceArr, tagArr, config):
     return list(set(entityArr))
 
     
-
-
 #生成测试数据
 def dispose(x, config):
     sentenceArr = []
@@ -85,7 +84,9 @@ def dispose(x, config):
 
     #切分句子
     pattern = r';|\.|\?|!|；|。|？|！'
-    sentenceArr.extend([element for element in re.split(pattern, x) if len(element.strip()) != ''])
+    sentenceArr.extend([list(element) for element in re.split(pattern, x) if len(element.strip()) != ''])
+
+    originSentenceArr = copy.deepcopy(sentenceArr)
 
     #字符转为相应的标识
     tokenizer = BertTokenizer.from_pretrained(config['model']['bert_base_chinese'], do_lower_case=True)
@@ -102,7 +103,8 @@ def dispose(x, config):
     lenList = [element if element < maxLen else maxLen for element in lenList]
     sentenceArr = [element+[0]*(maxLen-len(element)) if len(element) < maxLen else element[:maxLen] for element in sentenceArr]
 
-    return torch.LongTensor(sentenceArr), lenList
+
+    return torch.LongTensor(sentenceArr), originSentenceArr, lenList
 
 
 def dataPrepare(inputPath, outputPath):
@@ -149,5 +151,5 @@ def dataPrepare(inputPath, outputPath):
     #print(maxLen)
     input.close(); output.close()
               
-#dataPrepare('./data/train.csv', './data/train.txt')
-#dataPrepare('./data/valid.csv', './data/valid.txt')
+dataPrepare('./data/train.csv', './data/train.txt')
+dataPrepare('./data/valid.csv', './data/valid.txt')

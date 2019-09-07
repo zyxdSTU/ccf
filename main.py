@@ -137,32 +137,47 @@ def test(config):
     net.load_state_dict(torch.load(modelSavePath))
 
     testData = open(testDataPath, 'r', encoding='utf-8', errors='ignore')
-    submitData = open(testDataPath, 'r', encoding='utf-8', errors='ignore')
+    submitData = open(submitDataPath, 'w', encoding='utf-8', errors='ignore')
     submitData.write("id,unknownEntities\n")
     testReader = csv.reader(testData)
+
+    #number = 0
     with torch.no_grad():
-        for item in testReader:
+        for item in tqdm(testReader):
+            if testReader.line_num == 1: continue
+
+            #number += 1
+            #if number == 101: break
+
             id, title, text = item[0], item[1], item[2]
             text = title + text
-            batchSentence, lenList = dispose(text, config)
+            batchSentence, originSentenceArr, lenList = dispose(text, config)
             batchSentence.to(DEVICE)
             tagScores  = net(batchSentence)
             
-            sentenceArr, tagArr = []
+            sentenceArr, tagArr = [], []
             for index, element in enumerate(lenList):
                 tagScore = tagScores[index][:element]
                 sentence = batchSentence[index][:element]
                 sentenceArr.append(sentence.cpu().numpy().tolist())
                 tagArr.append([element.argmax().item() for element in tagScore])
 
+            #id转字符
+            for i in range(len(sentenceArr)):
+                for j in range(len(sentenceArr[i])):
+                    sentenceArr[i][j] = originSentenceArr[i][j];
+            tagArr =[[id2tag[element] for element in tag]for tag in tagArr]
+
             entityArr = acquireEntity(sentenceArr, tagArr, config)
+            #print (entityArr)
+
             def filter_word(w):
                 for wbad in ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
                         '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',']:
                     if wbad in w:
                         return ''
                 return w
-            entityArr = [entity for entity in entityArr if filter_word(entity) != '']
+            entityArr = [entity.strip() for entity in entityArr if filter_word(entity) != '' and len(entity) > 1]
 
             if len(entityArr) == 0: entityArr = ['FUCK']
 
@@ -172,8 +187,8 @@ def test(config):
 
 if __name__ == "__main__":
     optParser = OptionParser()
-    optParser.add_option('-tr','--train',action = 'store_true', dest='train')
-    optParser.add_option('-te','--test',action = 'store_true', dest='test')
+    optParser.add_option('--train',action = 'store_true', dest='train')
+    optParser.add_option('--test',action = 'store_true', dest='test')
 
     f = open('./config.yml', encoding='utf-8', errors='ignore')
     config = yaml.load(f)
