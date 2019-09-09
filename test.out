@@ -1,0 +1,13 @@
+main.py:178: YAMLLoadWarning: calling yaml.load() without Loader=... is deprecated, as the default Loader is unsafe. Please read https://msg.pyyaml.org/load for full details.
+  config = yaml.load(f)
+0it [00:00, ?it/s]
+Traceback (most recent call last):
+  File "main.py", line 188, in <module>
+    test(config)
+  File "main.py", line 143, in test
+    sentenceArr, tagArr = net.decode(batchSentence), []
+  File "/root/pytorch/ccf/model.py", line 46, in decode
+    return self.crf.decode(h, mask)
+  File "/root/pytorch/ccf/model.py", line 136, in decode
+    score_t = score.unsqueeze(1) + self.trans # [B, 1, C] -> [B, C, C]
+RuntimeError: expected device cuda:0 and dtype Float but got device cpu and dtype Float

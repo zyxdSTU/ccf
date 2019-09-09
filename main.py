@@ -86,14 +86,7 @@ def trainFun(net, iterData, optimizer, criterion, DEVICE):
         batchSentence = batchSentence.to(DEVICE)
         batchTag = batchTag.to(DEVICE)
         net.zero_grad()
-        tagScores  = net(batchSentence)
-
-        loss = 0
-        for index, element in enumerate(lenList):
-            tagScore = tagScores[index][:element]
-            tag = batchTag[index][:element]
-            loss +=  criterion(tagScore, tag)
-
+        loss  = net(batchSentence, batchTag)
         loss.backward()
         optimizer.step()
         totalLoss += loss.item(); number += 1
@@ -103,21 +96,15 @@ def evalFun(net, iterData, criterion, DEVICE):
     net.eval()
     totalLoss, number = 0, 0
     yTrue, yPre, ySentence = [], [], []
-    for batchSentence, batchTag, lenList in tqdm(iterData):
-        batchSentence = batchSentence.to(DEVICE)
-        batchTag = batchTag.to(DEVICE)
-        net.zero_grad()
-        tagScores  = net(batchSentence)
-
-        loss = 0
-        for index, element in enumerate(lenList):
-            tagScore = tagScores[index][:element]
-            tag = batchTag[index][:element]
-            loss +=  criterion(tagScore, tag)
-            yTrue.append(tag.cpu().numpy().tolist())
-            yPre.append([element.argmax().item() for element in tagScore])
-
-        totalLoss += loss.item(); number += 1
+    with torch.no_grad():
+        for batchSentence, batchTag, lenList in tqdm(iterData):
+            batchSentence = batchSentence.to(DEVICE)
+            batchTag = batchTag.to(DEVICE)
+            loss  = net(batchSentence, batchTag)
+            tagPre = net.decode(batchSentence)
+            tagTrue = [element[:length] for element, length in zip(batchTag.cpu().numpy(), lenList)]
+            yTrue.extend(tagTrue); yPre.extend(tagPre)
+            totalLoss += loss.item(); number += 1
 
     yTrue2tag = [[id2tag[element2] for element2 in element1] for element1 in yTrue]
     yPre2tag = [[id2tag[element2] for element2 in element1] for element1 in yPre]
@@ -129,55 +116,66 @@ def test(config):
     modelSavePath = config['data']['modelSavePath']
     testDataPath = config['data']['testDataPath']
     submitDataPath = config['data']['submitDataPath']
+    batchSize = config['model']['batchSize']
     #GPU/CPU
     DEVICE = config['DEVICE']
 
     #加载模型
     net = Net(config)
     net.load_state_dict(torch.load(modelSavePath))
+    net = net.to(DEVICE)
 
     testData = open(testDataPath, 'r', encoding='utf-8', errors='ignore')
     submitData = open(submitDataPath, 'w', encoding='utf-8', errors='ignore')
-    submitData.write("id,unknownEntities\n")
+    
     testReader = csv.reader(testData)
 
-    #number = 0
     with torch.no_grad():
         for item in tqdm(testReader):
-            if testReader.line_num == 1: continue
-
-            #number += 1
-            #if number == 101: break
+            if testReader.line_num == 1: submitData.write("id,unknownEntities\n"); continue
 
             id, title, text = item[0], item[1], item[2]
             text = title + text
-            batchSentence, originSentenceArr, lenList = dispose(text, config)
-            batchSentence.to(DEVICE)
-            tagScores  = net(batchSentence)
+            sentenceArr, originSentenceArr, lenList = dispose(text, config)
+
+            realSentenceArr, tagArr = [], []
+            start, end = 0, 0
+            while start < len(sentenceArr):
+                if start + batchSize <= len(sentenceArr): end = start + batchSize
+                else: end = len(sentenceArr)
+
+                sentenceArrElement = sentenceArr[start:end]
+                originSentenceArrElement = originSentenceArr[start:end]
+                lenListElement = lenList[start:end]
+
+                #重要
+                start = end
+
+                sentenceArrElement = sentenceArrElement.to(DEVICE)
+                tag, sentence = net.decode(sentenceArrElement), []
+                
+                for index, element in enumerate(lenListElement):
+                    temp = sentenceArrElement[index][:element]
+                    sentence.append(temp.cpu().numpy().tolist())
+
+                #id转字符
+                for i in range(len(sentence)):
+                    for j in range(len(sentence[i])):
+                        sentence[i][j] = originSentenceArrElement[i][j];
+
+                tag =[[id2tag[element2] for element2 in element1]for element1 in tag]
+
+                realSentenceArr.extend(sentence); tagArr.extend(tag)
+
+            entityArr = acquireEntity(realSentenceArr, tagArr, config)
             
-            sentenceArr, tagArr = [], []
-            for index, element in enumerate(lenList):
-                tagScore = tagScores[index][:element]
-                sentence = batchSentence[index][:element]
-                sentenceArr.append(sentence.cpu().numpy().tolist())
-                tagArr.append([element.argmax().item() for element in tagScore])
-
-            #id转字符
-            for i in range(len(sentenceArr)):
-                for j in range(len(sentenceArr[i])):
-                    sentenceArr[i][j] = originSentenceArr[i][j];
-            tagArr =[[id2tag[element] for element in tag]for tag in tagArr]
-
-            entityArr = acquireEntity(sentenceArr, tagArr, config)
-            #print (entityArr)
-
             def filter_word(w):
                 for wbad in ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
-                        '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',']:
+                        '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',','.','——', '“', '”', '！', ' ']:
                     if wbad in w:
                         return ''
                 return w
-            entityArr = [entity.strip() for entity in entityArr if filter_word(entity) != '' and len(entity) > 1]
+            entityArr = [entity for entity in entityArr if filter_word(entity) != '' and len(entity) > 1]
 
             if len(entityArr) == 0: entityArr = ['FUCK']
 
@@ -193,6 +191,7 @@ if __name__ == "__main__":
     f = open('./config.yml', encoding='utf-8', errors='ignore')
     config = yaml.load(f)
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #print (DEVICE)
     config['DEVICE'] = DEVICE
     f.close()
     option , args = optParser.parse_args()

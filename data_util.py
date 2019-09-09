@@ -61,16 +61,21 @@ def stop_words(x):
 
 def acquireEntity(sentenceArr, tagArr, config):
     entityArr, entity = [], ''
-    #print (tagArr)
     for i in range(len(tagArr)):
         for j in range(len(tagArr[i])):
-            if tagArr[i][j] == 'B':
-                if entity != '':entityArr.append(entity); entity = sentenceArr[i][j]
-                else: entity += sentenceArr[i][j]
-            if tagArr[i][j] == 'I':
-                if entity != '': entity = entity + sentenceArr[i][j];
 
-    if entity != '': entityArr.append(entity)
+            if tagArr[i][j] == 'B':
+                if entity != '':entityArr.append(entity.strip()); entity = sentenceArr[i][j]
+                else: entity += sentenceArr[i][j]
+
+            if tagArr[i][j] == 'I':
+                if entity != '': entity = entity + sentenceArr[i][j]
+
+            if tagArr[i][j] == 'O':
+                if entity != '': entityArr.append(entity.strip()); entity = ''
+
+    if entity != '': entityArr.append(entity.strip())
+
 
     return list(set(entityArr))
 
@@ -108,6 +113,12 @@ def dispose(x, config):
 
 
 def dataPrepare(inputPath, outputPath):
+
+    def contain(sentence, entityArr):
+        for entity in entityArr:
+            if entity in sentence: return True
+        return False
+
     input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
     output = open(outputPath, 'w', encoding='utf-8', errors='ignore')
     inputReader = csv.reader(input)
@@ -124,13 +135,15 @@ def dataPrepare(inputPath, outputPath):
         if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) if len(element.strip()) != ''])
         if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) if len(element.strip()) != '']);
 
-        # Len = max([len(element) for element in sentenceArr])
-        # if Len > maxLen: maxLen = Len
-
+        
         if len(item[3].strip()) == 0: 
             tagArr = [['O'] * len(sentence) for sentence in sentenceArr]
         else:
             entityArr = item[3].split(';')
+
+            #过滤不包含实体的句子
+            sentenceArr = [sentence for sentence in sentenceArr if contain(sentence, entityArr)]
+            
             tagArr = [sentence for sentence in sentenceArr]
             for entity in entityArr:
                 for i in  range(len(tagArr)):
@@ -151,5 +164,5 @@ def dataPrepare(inputPath, outputPath):
     #print(maxLen)
     input.close(); output.close()
               
-dataPrepare('./data/train.csv', './data/train.txt')
-dataPrepare('./data/valid.csv', './data/valid.txt')
+#dataPrepare('./data/train.csv', './data/train.txt')
+#dataPrepare('./data/valid.csv', './data/valid.txt')

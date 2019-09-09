@@ -12,8 +12,8 @@
 # input.close()
 
 def acquireEntity(sentenceArr, tagArr, config):
-    tagArr = [['B', 'I', 'I', 'O'], ['B', 'I', 'I', 'O']]
-    sentenceArr = [['U', 'U', 'U', 'O'], ['Y', 'Y', 'Y', 'O']]
+    tagArr = [['B', 'I', 'I', 'O', 'I', 'B', 'I'], ['B', 'I', 'I', 'O']]
+    sentenceArr = [['U', 'U', 'U', 'O', 'F', 'U', 'U'], ['Y', 'Y', 'Y', 'O']]
     entityArr, entity = [], ''
 
     for i in range(len(tagArr)):
@@ -23,6 +23,8 @@ def acquireEntity(sentenceArr, tagArr, config):
                 else: entity += sentenceArr[i][j]
             if tagArr[i][j] == 'I':
                 if entity != '': entity = entity + sentenceArr[i][j];
+            if tagArr[i][j] == 'O':
+                if entity != '': entityArr.append(entity); entity = ''
 
     if entity != '': entityArr.append(entity)
 
