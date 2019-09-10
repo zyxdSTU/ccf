@@ -59,7 +59,7 @@ def stop_words(x):
     return x
 
 
-def acquireEntity(sentenceArr, tagArr, config):
+def acquireEntity(sentenceArr, tagArr):
     entityArr, entity = [], ''
     for i in range(len(tagArr)):
         for j in range(len(tagArr[i])):
@@ -76,40 +76,42 @@ def acquireEntity(sentenceArr, tagArr, config):
 
     if entity != '': entityArr.append(entity.strip())
 
-
     return list(set(entityArr))
 
-    
-#生成测试数据
-def dispose(x, config):
-    sentenceArr = []
 
-    #数据清洗
-    x = stop_words(x)
+##Test数据集需要记住每一项数据包含的文本行数
+##Test数据集并且没有标签
+def dataTestPrepare(inputPath, outputDataPath, outputLenPath):
 
-    #切分句子
+    input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
+    outputData = open(outputDataPath, 'w', encoding='utf-8', errors='ignore')
+    outputLen = open(outputLenPath, 'w', encoding='utf-8', errors='ignore')
+
+
+    inputReader = csv.reader(input)
     pattern = r';|\.|\?|!|；|。|？|！'
-    sentenceArr.extend([list(element) for element in re.split(pattern, x) if len(element.strip()) != ''])
 
-    originSentenceArr = copy.deepcopy(sentenceArr)
+    for item in inputReader:
+        if inputReader.line_num == 1: continue
+        id, title, text = item[0], item[1], item[2]
+        sentenceArr, tagArr = [], []
 
-    #字符转为相应的标识
-    tokenizer = BertTokenizer.from_pretrained(config['model']['bert_base_chinese'], do_lower_case=True)
-    for i in range(len(sentenceArr)):
-        for j in range(len(sentenceArr[i])):
-            if sentenceArr[i][j] in tokenizer.vocab.keys():
-                sentenceArr[i][j] = tokenizer.vocab[sentenceArr[i][j]]
-            else: sentenceArr[i][j] = tokenizer.vocab['[UNK]']
-    
-    #截断和补全
-    maxWordLen = config['model']['maxWordLen']
-    lenList = [len(element)for element in sentenceArr]
-    maxLen = maxWordLen if max(lenList) > maxWordLen else max(lenList)
-    lenList = [element if element < maxLen else maxLen for element in lenList]
-    sentenceArr = [element+[0]*(maxLen-len(element)) if len(element) < maxLen else element[:maxLen] for element in sentenceArr]
+        #去除一些冗余信息
+        title = stop_words(title); text = stop_words(text)
 
+        #注意过滤空行
+        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) if len(element.strip()) != 0])
+        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) if len(element.strip()) != 0])
 
-    return torch.LongTensor(sentenceArr), originSentenceArr, lenList
+        
+        for sentence in sentenceArr:
+            for element in sentence:
+                outputData.write(element + '\n')
+            outputData.write('\n')
+
+        outputLen.write(id + '\t' + str(len(sentenceArr)) + '\n')
+        
+    input.close(); outputData.close(); outputLen.close()
 
 
 def dataPrepare(inputPath, outputPath):
@@ -121,9 +123,11 @@ def dataPrepare(inputPath, outputPath):
 
     input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
     output = open(outputPath, 'w', encoding='utf-8', errors='ignore')
+
+
     inputReader = csv.reader(input)
     pattern = r';|\.|\?|!|；|。|？|！'
-    maxLen = 0
+
     for item in inputReader:
         id, title, text = item[0], item[1], item[2]
         sentenceArr, tagArr = [], []
@@ -132,12 +136,11 @@ def dataPrepare(inputPath, outputPath):
         title = stop_words(title); text = stop_words(text)
 
         #注意过滤空行
-        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) if len(element.strip()) != ''])
-        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) if len(element.strip()) != '']);
+        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) if len(element.strip()) != 0])
+        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) if len(element.strip()) != 0])
 
         
-        if len(item[3].strip()) == 0: 
-            tagArr = [['O'] * len(sentence) for sentence in sentenceArr]
+        if len(item[3].strip()) == 0: continue            
         else:
             entityArr = item[3].split(';')
 
@@ -155,14 +158,17 @@ def dataPrepare(inputPath, outputPath):
                     if tagArr[i][j] == 'Ё': tagArr[i][j] = 'B'
                     elif tagArr[i][j] == 'Ж': tagArr[i][j] = 'I'
                     else: tagArr[i][j] = 'O'
-                        
+
+        assert len(sentenceArr) == len(tagArr)
+
         for sentence, tag in zip(sentenceArr, tagArr):
             assert len(sentence) == len(tag)
             for element1, element2 in zip(sentence, tag):
                 output.write(element1 + '\t' + element2 + '\n')
             output.write('\n')
-    #print(maxLen)
+
     input.close(); output.close()
               
-#dataPrepare('./data/train.csv', './data/train.txt')
-#dataPrepare('./data/valid.csv', './data/valid.txt')
+# dataPrepare('./data/train.csv', './data/train.txt')
+# dataPrepare('./data/valid.csv', './data/valid.txt')
+#dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')

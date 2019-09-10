@@ -1,7 +1,9 @@
 import yaml
 from optparse import OptionParser
 from data_loader import NERDataset
+from data_loader import NERTestDataset
 from data_loader import pad
+from data_loader import testPad
 from torch.utils import data
 from model import Net
 from tqdm import tgrange
@@ -15,7 +17,6 @@ import csv
 from seqeval.metrics import f1_score, accuracy_score, classification_report
 from data_loader import id2tag
 from pytorch_pretrained_bert import BertTokenizer
-from data_util import dispose
 from data_util import acquireEntity
 
 def train(config):
@@ -86,7 +87,13 @@ def trainFun(net, iterData, optimizer, criterion, DEVICE):
         batchSentence = batchSentence.to(DEVICE)
         batchTag = batchTag.to(DEVICE)
         net.zero_grad()
+
         loss  = net(batchSentence, batchTag)
+
+        #多卡训练
+        if torch.cuda.device_count() > 1:
+            loss = loss.mean()
+
         loss.backward()
         optimizer.step()
         totalLoss += loss.item(); number += 1
@@ -115,6 +122,7 @@ def evalFun(net, iterData, criterion, DEVICE):
 def test(config):
     modelSavePath = config['data']['modelSavePath']
     testDataPath = config['data']['testDataPath']
+    testLenPath = config['data']['testLenPath']
     submitDataPath = config['data']['submitDataPath']
     batchSize = config['model']['batchSize']
     #GPU/CPU
@@ -125,62 +133,55 @@ def test(config):
     net.load_state_dict(torch.load(modelSavePath))
     net = net.to(DEVICE)
 
-    testData = open(testDataPath, 'r', encoding='utf-8', errors='ignore')
+    #加载数据
+    testDataset = NERTestDataset(testDataPath, config)
+
+    testIter = data.DataLoader(dataset = testDataset,
+                                 batch_size = batchSize,
+                                 shuffle = False,
+                                 num_workers = 4,
+                                 collate_fn = testPad)
+
     submitData = open(submitDataPath, 'w', encoding='utf-8', errors='ignore')
+    testLen = open(testLenPath, 'r', encoding='utf-8', errors='ignore')
     
-    testReader = csv.reader(testData)
-
+    sentenceArr, tagArr = [], []
     with torch.no_grad():
-        for item in tqdm(testReader):
-            if testReader.line_num == 1: submitData.write("id,unknownEntities\n"); continue
+        for batchSentence, batchOriginSentence in tqdm(testIter):
+            batchSentence = batchSentence.to(DEVICE)
+            tagPre = net.decode(batchSentence)
+            tagArr.extend(tagPre)
+            sentenceArr.extend(batchOriginSentence)
 
-            id, title, text = item[0], item[1], item[2]
-            text = title + text
-            sentenceArr, originSentenceArr, lenList = dispose(text, config)
+    #id转标识
+    tagArr =[[id2tag[element2] for element2 in element1]for element1 in tagArr]
 
-            realSentenceArr, tagArr = [], []
-            start, end = 0, 0
-            while start < len(sentenceArr):
-                if start + batchSize <= len(sentenceArr): end = start + batchSize
-                else: end = len(sentenceArr)
+    lenList = []
+    start, end = 0, 0
+    for line in testLen.readlines():
+        id, length = line.strip('\n').split['\t'][0], int(line.strip('\n').split['\t'][1])
+        sentenceElement, tagElement = sentenceArr[start:start+length], tagArr[start:start+length]
+        start += length
 
-                sentenceArrElement = sentenceArr[start:end]
-                originSentenceArrElement = originSentenceArr[start:end]
-                lenListElement = lenList[start:end]
+        entityArr = acquireEntity(sentenceElement, tagElement)
 
-                #重要
-                start = end
-
-                sentenceArrElement = sentenceArrElement.to(DEVICE)
-                tag, sentence = net.decode(sentenceArrElement), []
-                
-                for index, element in enumerate(lenListElement):
-                    temp = sentenceArrElement[index][:element]
-                    sentence.append(temp.cpu().numpy().tolist())
-
-                #id转字符
-                for i in range(len(sentence)):
-                    for j in range(len(sentence[i])):
-                        sentence[i][j] = originSentenceArrElement[i][j];
-
-                tag =[[id2tag[element2] for element2 in element1]for element1 in tag]
-
-                realSentenceArr.extend(sentence); tagArr.extend(tag)
-
-            entityArr = acquireEntity(realSentenceArr, tagArr, config)
+        print (entityArr)
             
-            def filter_word(w):
-                for wbad in ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
-                        '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',','.','——', '“', '”', '！', ' ']:
-                    if wbad in w:
-                        return ''
-                return w
-            entityArr = [entity for entity in entityArr if filter_word(entity) != '' and len(entity) > 1]
+        def filter_word(w):
+            for wbad in ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
+                    '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',','.','——', '“', '”', '！', ' ']:
+                if wbad in w:
+                    return ''
+            return w
 
-            if len(entityArr) == 0: entityArr = ['FUCK']
+        #过滤一些无用实体
+        entityArr = [entity for entity in entityArr if filter_word(entity) != '' and len(entity) > 1]
 
-            submitData.write('%s,%s\n' % (id, ';'.join(entityArr)))
-    testData.close(); submitData.close();
+        if len(entityArr) == 0: entityArr = ['FUCK']
+
+        submitData.write('%s,%s\n' % (id, ';'.join(entityArr)))
+
+    submitData.close(); testLen.close()
 
 
 if __name__ == "__main__":

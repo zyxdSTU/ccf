@@ -1,7 +1,7 @@
 from torch.utils import data
 from pytorch_pretrained_bert import BertTokenizer
 import torch
-
+import copy
 tagDict = ['<PAD>', 'O', 'B', 'I']
 
 tag2id = {element:index for index, element in enumerate(tagDict)}
@@ -63,6 +63,47 @@ class NERDataset(data.Dataset):
             tag = tag[:maxWordLen]
         return sentence, tag
 
+
+class NERTestDataset(data.Dataset):
+    '''
+    : path 语料路径
+    '''
+    def __init__(self, path, config):
+        self.config = config
+        f = open(path, 'r', encoding='utf-8', errors='ignore')
+        data = f.read().split('\n\n'); f.close()
+
+        self.sentenceList = [[element2 for element2 in element1.split('\n')]for element1 in data]
+        self.tokenizer = BertTokenizer.from_pretrained(self.config['model']['bert_base_chinese'], do_lower_case=True)
+    
+    def __len__(self):
+        return len(self.sentenceList)
+
+    def __getitem__(self, index):
+        maxWordLen = self.config['model']['maxWordLen']
+        sentence = self.sentenceList[index]
+
+        #如果句子太长进行截断
+        if len(sentence) > maxWordLen:
+            sentence = sentence[:maxWordLen]
+
+        originSentence = copy.deepcopy(sentence)
+
+        for i in range(len(sentence)):
+            if sentence[i] in self.tokenizer.vocab.keys():
+                sentence[i] = self.tokenizer.vocab[sentence[i]]
+            else: sentence[i] = self.tokenizer.vocab['[UNK]']
+
+        return sentence, originSentence
+
+def testPad(batch):
+    f1 = lambda x:[element[x] for element in batch]
+    lenList = [len(element) for element in f1(0)]
+    maxLen = max(lenList)
+
+    f2 = lambda x, maxLen:[element[x] + [0] * (maxLen - len(element[x])) for element in batch]
+
+    return torch.LongTensor(f2(0, maxLen)), f1(1)
 '''
 进行填充
 '''

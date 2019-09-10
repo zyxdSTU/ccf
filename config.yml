@@ -2,13 +2,14 @@ data:
   trainDataPath: './data/train.txt'
   validDataPath: './data/valid.txt'
   modelSavePath: '../ner_params/ccfParams.pkl'
-  testDataPath: './data/Test_Data.csv'
+  testDataPath: './data/test.txt'
+  testLenPath: './data/test.record'
   submitDataPath: './data/submit.csv'
 model:
   batchSize: 20
   bert_base_chinese: '../bert_base_chinese'
-  learningRate: 0.0001
-  maxWordLen: 256 #与Bert对齐，不能改变
+  learningRate: 0.0005
+  maxWordLen: 320 #与Bert对齐，不能改变
   epochNum: 100
   earlyStop: 10 #早停机制
   dropout: 0.5
