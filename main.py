@@ -107,8 +107,17 @@ def evalFun(net, iterData, criterion, DEVICE):
         for batchSentence, batchTag, lenList in tqdm(iterData):
             batchSentence = batchSentence.to(DEVICE)
             batchTag = batchTag.to(DEVICE)
+            
             loss  = net(batchSentence, batchTag)
-            tagPre = net.decode(batchSentence)
+
+            #多卡训练
+            if torch.cuda.device_count() > 1:
+                loss = loss.mean()
+
+            if torch.cuda.device_count() > 1:
+                tagPre = net.module.decode(batchSentence)
+            else: tagPre = net.decode(batchSentence)
+
             tagTrue = [element[:length] for element, length in zip(batchTag.cpu().numpy(), lenList)]
             yTrue.extend(tagTrue); yPre.extend(tagPre)
             totalLoss += loss.item(); number += 1
@@ -130,6 +139,8 @@ def test(config):
 
     #加载模型
     net = Net(config)
+    if torch.cuda.device_count() > 1:
+        net = nn.DataParallel(net)
     net.load_state_dict(torch.load(modelSavePath))
     net = net.to(DEVICE)
 
@@ -149,7 +160,11 @@ def test(config):
     with torch.no_grad():
         for batchSentence, batchOriginSentence in tqdm(testIter):
             batchSentence = batchSentence.to(DEVICE)
-            tagPre = net.decode(batchSentence)
+
+            if torch.cuda.device_count() > 1:
+                tagPre = net.module.decode(batchSentence)
+            else: tagPre = net.decode(batchSentence)
+
             tagArr.extend(tagPre)
             sentenceArr.extend(batchOriginSentence)
 

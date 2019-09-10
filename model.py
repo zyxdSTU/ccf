@@ -26,7 +26,7 @@ class Net(nn.Module):
     def forward(self, batchSentence, batchTag):
         mask = batchSentence.data.gt(0).float()
         encodedLayers, _ = self.bertModel(batchSentence, output_all_encoded_layers=False)
-        self.lstm.flatten_parameters()
+        #self.lstm.flatten_parameters()
         h, _ = self.lstm(encodedLayers)
         h = nn.Dropout(self.dropout)(h)
         h = self.fc(h)
