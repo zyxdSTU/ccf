@@ -6,10 +6,10 @@ data:
   testLenPath: './data/test.record'
   submitDataPath: './data/submit.csv'
 model:
-  batchSize: 30
-  bert_base_chinese: '../bert_base_chinese'
+  batchSize: 20
+  bert_base_chinese: '../chinese_wwm_ext_pytorch'
   learningRate: 0.0005
-  maxWordLen: 320 #与Bert对齐，不能改变
+  maxWordLen: 256 #与Bert对齐，不能改变
   epochNum: 100
   earlyStop: 10 #早停机制
   dropout: 0.5

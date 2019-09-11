@@ -63,14 +63,15 @@ def train(config):
         trainLoss = trainFun(net, trainIter, optimizer=optimizer, criterion=lossFunction, DEVICE=DEVICE)
         validLoss, f1Score = evalFun(net,validIter,criterion=lossFunction, DEVICE=DEVICE)
 
-        if f1Score > maxScore:
-            maxScore = f1Score
+        print ('训练损失为: %f' % trainLoss)
+
+        if validLoss < beforeLoss:
+            beforeLoss = validLoss
             torch.save(net.state_dict(), modelSavePath)
 
-        print ('训练损失为: %f' % trainLoss)
-        print ('验证损失为:%f   f1Score:%f / %f' % (validLoss, f1Score, maxScore))
+        print ('验证损失为:%f / %f   f1Score:%f' % (validLoss, beforeLoss, f1Score))
 
-        if f1Score < maxScore:
+        if validLoss > beforeLoss:
             earlyNumber += 1
             print('earyStop: %d/%d' % (earlyNumber, earlyStop))
         else:
@@ -174,7 +175,7 @@ def test(config):
     lenList = []
     start, end = 0, 0
     for line in testLen.readlines():
-        id, length = line.strip('\n').split['\t'][0], int(line.strip('\n').split['\t'][1])
+        id, length = line.strip('\n').split('\t')[0], int(line.strip('\n').split('\t')[1])
         sentenceElement, tagElement = sentenceArr[start:start+length], tagArr[start:start+length]
         start += length
 
@@ -212,10 +213,10 @@ if __name__ == "__main__":
     f.close()
     option , args = optParser.parse_args()
 
-    if option.train == True:
-        train(config)
+    #if option.train == True:
+    train(config)
         
-    if option.test == True:
-        test(config)
+    #if option.test == True:
+    test(config)
 
         
