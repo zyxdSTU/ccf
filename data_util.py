@@ -139,13 +139,13 @@ def dataPrepare(inputPath, outputPath):
         if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) if len(element.strip()) != 0])
         if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) if len(element.strip()) != 0])
 
-        
-        if len(item[3].strip()) == 0: continue            
+        #不过滤不包含实体的句子
+        if len(item[3].strip()) == 0: tagArr = [['O'] * len(sentence) for sentence in sentenceArr]            
         else:
             entityArr = item[3].split(';')
 
             #过滤不包含实体的句子
-            sentenceArr = [sentence for sentence in sentenceArr if contain(sentence, entityArr)]
+            #sentenceArr = [sentence for sentence in sentenceArr if contain(sentence, entityArr)]
             
             tagArr = [sentence for sentence in sentenceArr]
             for entity in entityArr:
@@ -169,6 +169,6 @@ def dataPrepare(inputPath, outputPath):
 
     input.close(); output.close()
               
-# dataPrepare('./data/train.csv', './data/train.txt')
-# dataPrepare('./data/valid.csv', './data/valid.txt')
+#dataPrepare('./data/train.csv', './data/train.txt')
+#dataPrepare('./data/valid.csv', './data/valid.txt')
 #dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')

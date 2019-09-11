@@ -65,13 +65,13 @@ def train(config):
 
         print ('训练损失为: %f' % trainLoss)
 
-        if validLoss < beforeLoss:
-            beforeLoss = validLoss
+        if f1Score > maxScore:
+            maxScore = f1Score
             torch.save(net.state_dict(), modelSavePath)
 
-        print ('验证损失为:%f / %f   f1Score:%f' % (validLoss, beforeLoss, f1Score))
+        print ('验证损失为:%f   f1Score: %f / %f' % (validLoss, f1Score, maxScore))
 
-        if validLoss > beforeLoss:
+        if f1Score < maxScore:
             earlyNumber += 1
             print('earyStop: %d/%d' % (earlyNumber, earlyStop))
         else:
