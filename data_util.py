@@ -78,6 +78,35 @@ def acquireEntity(sentenceArr, tagArr):
 
     return list(set(entityArr))
 
+#剔除重复的实体
+def f2_score(y_true, y_pred, y_Sentence, validLenPath):
+    validLen = open(validLenPath, 'r', encoding='utf-8', errors='ignore')
+    start = 0
+    TP, FP, FN = 0, 0, 0
+    for line in validLen.readlines():
+        id, length = line.strip('\n').split('\t')[0], int(line.strip('\n').split('\t')[1])
+        trueEntity = acquireEntity(y_Sentence[start:start+length], y_true[start:start+length])
+        predEntity = acquireEntity(y_Sentence[start:start+length], y_pred[start:start+length])
+        start = start + length
+
+        TPE, FPE, FNE = 0, 0, 0
+        for entity in predEntity:
+            if entity in trueEntity: TPE += 1
+            else: FPE += 1
+        FNE = len(trueEntity) - TPE
+        TP += TPE; FP += FPE; FN += FNE
+    
+    if TP + FP == 0 or TP + FN == 0: return 0
+
+    MicroP = TP / (TP + FP); MicroR = TP / (TP + FN)
+
+    if MicroP + MicroR == 0: return 0
+
+    MicroF = 2 * MicroP * MicroR / (MicroP + MicroR)
+
+    validLen.close()
+
+    return MicroF
 
 ##Test数据集需要记住每一项数据包含的文本行数
 ##Test数据集并且没有标签
@@ -100,8 +129,10 @@ def dataTestPrepare(inputPath, outputDataPath, outputLenPath):
         title = stop_words(title); text = stop_words(text)
 
         #注意过滤空行
-        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) if len(element.strip()) != 0])
-        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) if len(element.strip()) != 0])
+        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) 
+            if len(element.strip()) > 0])
+        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) 
+            if len(element.strip()) > 0])
 
         
         for sentence in sentenceArr:
@@ -114,7 +145,7 @@ def dataTestPrepare(inputPath, outputDataPath, outputLenPath):
     input.close(); outputData.close(); outputLen.close()
 
 
-def dataPrepare(inputPath, outputPath):
+def dataPrepare(inputPath, outputPath, outputLenPath):
 
     def contain(sentence, entityArr):
         for entity in entityArr:
@@ -124,10 +155,12 @@ def dataPrepare(inputPath, outputPath):
     input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
     output = open(outputPath, 'w', encoding='utf-8', errors='ignore')
 
+    outputLen = open(outputLenPath, 'w', encoding='utf-8', errors='ignore')
 
     inputReader = csv.reader(input)
     pattern = r';|\.|\?|!|；|。|？|！'
 
+    #sentenceLen = open('./data/len.txt', 'a', encoding='utf-8', errors='ignore')
     for item in inputReader:
         id, title, text = item[0], item[1], item[2]
         sentenceArr, tagArr = [], []
@@ -135,9 +168,13 @@ def dataPrepare(inputPath, outputPath):
         #去除一些冗余信息
         title = stop_words(title); text = stop_words(text)
 
-        #注意过滤空行
-        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) if len(element.strip()) != 0])
-        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) if len(element.strip()) != 0])
+        #注意过滤不足10字符的句子
+        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) 
+            if (len(element.strip()) > 10)])
+        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) 
+            if (len(element.strip()) > 10)])
+
+        #for sentence in sentenceArr: sentenceLen.write(str(len(sentence)) + '\n')
 
         #不过滤不包含实体的句子
         if len(item[3].strip()) == 0: tagArr = [['O'] * len(sentence) for sentence in sentenceArr]            
@@ -161,14 +198,17 @@ def dataPrepare(inputPath, outputPath):
 
         assert len(sentenceArr) == len(tagArr)
 
+        outputLen.write(id + '\t' + str(len(sentenceArr)) + '\n')
+
         for sentence, tag in zip(sentenceArr, tagArr):
             assert len(sentence) == len(tag)
             for element1, element2 in zip(sentence, tag):
                 output.write(element1 + '\t' + element2 + '\n')
             output.write('\n')
 
-    input.close(); output.close()
+    input.close(); output.close(); outputLen.close()
+    #sentenceLen.close()
               
-#dataPrepare('./data/train.csv', './data/train.txt')
-#dataPrepare('./data/valid.csv', './data/valid.txt')
-#dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')
+dataPrepare('./data/train.csv', './data/train.txt', './data/train.record')
+dataPrepare('./data/valid.csv', './data/valid.txt', './data/valid.record')
+dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')

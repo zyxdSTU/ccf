@@ -11,24 +11,27 @@
 #     print (f(1,arrElement))
 # input.close()
 
-def acquireEntity(sentenceArr, tagArr, config):
-    tagArr = [['B', 'I', 'I', 'O', 'I', 'B', 'I'], ['B', 'I', 'I', 'O']]
-    sentenceArr = [['U', 'U', 'U', 'O', 'F', 'U', 'U'], ['Y', 'Y', 'Y', 'O']]
-    entityArr, entity = [], ''
+# def acquireEntity(sentenceArr, tagArr, config):
+#     tagArr = [['B', 'I', 'I', 'O', 'I', 'B', 'I'], ['B', 'I', 'I', 'O']]
+#     sentenceArr = [['U', 'U', 'U', 'O', 'F', 'U', 'U'], ['Y', 'Y', 'Y', 'O']]
+#     entityArr, entity = [], ''
 
-    for i in range(len(tagArr)):
-        for j in range(len(tagArr[i])):
-            if tagArr[i][j] == 'B':
-                if entity != '':entityArr.append(entity); entity = sentenceArr[i][j]
-                else: entity += sentenceArr[i][j]
-            if tagArr[i][j] == 'I':
-                if entity != '': entity = entity + sentenceArr[i][j];
-            if tagArr[i][j] == 'O':
-                if entity != '': entityArr.append(entity); entity = ''
+#     for i in range(len(tagArr)):
+#         for j in range(len(tagArr[i])):
+#             if tagArr[i][j] == 'B':
+#                 if entity != '':entityArr.append(entity); entity = sentenceArr[i][j]
+#                 else: entity += sentenceArr[i][j]
+#             if tagArr[i][j] == 'I':
+#                 if entity != '': entity = entity + sentenceArr[i][j];
+#             if tagArr[i][j] == 'O':
+#                 if entity != '': entityArr.append(entity); entity = ''
 
-    if entity != '': entityArr.append(entity)
+#     if entity != '': entityArr.append(entity)
 
-    print (entityArr)
-    return list(set(entityArr))
+#     print (entityArr)
+#     return list(set(entityArr))
 
-acquireEntity(None, None, None)
+# acquireEntity(None, None, None)
+
+str = r'n12343  '
+print (len(str.strip()))

@@ -44,8 +44,8 @@ class NERDataset(data.Dataset):
         maxWordLen = self.config['model']['maxWordLen']
         sentence, tag = self.sentenceList[index], self.tagList[index]
 
-        sentenceCopy, tagCopy = sentence, tag
-    
+        originSentence = copy.deepcopy(sentence)
+
         for i in range(len(sentence)):
             if sentence[i] in self.tokenizer.vocab.keys():
                 sentence[i] = self.tokenizer.vocab[sentence[i]]
@@ -53,15 +53,14 @@ class NERDataset(data.Dataset):
 
         tag = [tag2id[element] for element in tag]
 
-        if len(sentence) != len(tag): 
-            print(sentenceCopy, tagCopy)
-            
         assert len(sentence) == len(tag)
+            
         #如果句子太长进行截断
         if len(sentence) > maxWordLen:
             sentence = sentence[:maxWordLen]
             tag = tag[:maxWordLen]
-        return sentence, tag
+            
+        return sentence, tag, originSentence
 
 
 class NERTestDataset(data.Dataset):
@@ -103,19 +102,19 @@ def testPad(batch):
 
     f2 = lambda x, maxLen:[element[x] + [0] * (maxLen - len(element[x])) for element in batch]
 
-    return torch.LongTensor(f2(0, maxLen)), f1(1)
+    return torch.LongTensor(f2(0, maxLen)), f1(1), lenList
 '''
 进行填充
 '''
 def pad(batch):
     #句子最大长度
-    f = lambda x:[element[x] for element in batch]
-    lenList = [len(element) for element in f(0)]
+    f1 = lambda x:[element[x] for element in batch]
+    lenList = [len(element) for element in f1(0)]
     maxLen = max(lenList)
     
-    f = lambda x, maxLen:[element[x] + [0] * (maxLen - len(element[x])) for element in batch]
+    f2 = lambda x, maxLen:[element[x] + [0] * (maxLen - len(element[x])) for element in batch]
 
-    return torch.LongTensor(f(0, maxLen)), torch.LongTensor(f(1, maxLen)), lenList
+    return torch.LongTensor(f2(0, maxLen)), torch.LongTensor(f2(1, maxLen)), lenList, f1(2)
 
 
 
