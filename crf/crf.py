@@ -6,12 +6,12 @@ sys.path.append('../')
 from data_util import acquireEntity
 
 #3 crf train
-# crf_train = "crf_learn -f 3 template.txt ../data/train.txt dg_model"
-# os.system(crf_train)
+crf_train = "crf_learn -f 3 template.txt ../data/train.txt dg_model"
+os.system(crf_train)
 
-# 4 crf test
-# crf_test = "crf_test -m dg_model ../data/test.txt -o crf_result.txt"
-# os.system(crf_test)
+#4 crf test
+crf_test = "crf_test -m dg_model ../data/test.txt -o crf_result.txt"
+os.system(crf_test)
 
 
 def extractTestData(inputPath, outputPath):

@@ -2,7 +2,16 @@ from torch.utils import data
 from pytorch_pretrained_bert import BertTokenizer
 import torch
 import copy
+from random import random
+
 tagDict = ['<PAD>', 'O', 'B', 'I']
+
+
+# tagDict = tagDict = ['<PAD>', 'B-NAME', 'M-NAME', 'E-NAME', 'O', 'B-CONT', 'M-CONT', 
+#     'E-CONT', 'B-EDU', 'M-EDU', 'E-EDU', 'B-TITLE', 'M-TITLE', 'E-TITLE', 
+#     'B-ORG', 'M-ORG', 'E-ORG', 'B-RACE', 'E-RACE', 'B-PRO', 'M-PRO', 'E-PRO', 
+#     'B-LOC', 'M-LOC', 'E-LOC','S-RACE', 'S-NAME', 'M-RACE', 'S-ORG', 'S-CONT', 
+#     'S-EDU','S-TITLE', 'S-PRO','S-LOC']
 
 tag2id = {element:index for index, element in enumerate(tagDict)}
 id2tag = {index:element for index, element in enumerate(tagDict)}
@@ -15,27 +24,17 @@ class NERDataset(data.Dataset):
     def __init__(self, path, config):
         self.config = config
         f = open(path, 'r', encoding='utf-8', errors='ignore')
-        sentenceList, tagList = [], []
-        sentence, tag = [], []
-        for line in f.readlines():
-            #换行
-            if len(line.strip()) == 0:
-                if len(sentence) != 0 and len(tag) != 0: 
-                    if len(sentence) == len(tag):
-                        sentenceList.append(sentence); tagList.append(tag)
-                sentence, tag = [], []
-            else:
-                line = line.strip()
-                if len(line.split()) < 2: continue
-                sentence.append(line.split('\t')[0])
-                tag.append(line.split('\t')[1])
-        f.close()
-        if len(sentence) != 0 and len(tag) != 0: 
-            if len(sentence) == len(tag):
-                sentenceList.append(sentence); tagList.append(tag)
+        data = f.read().split('\n\n'); f.close()
+
+        data = [[(element2.split('\t')[0], element2.split('\t')[1])
+            for element2 in element1.split('\n') if len(element2) != 0]
+            for element1 in data if len(element1) != 0]
+
+        self.sentenceList = [[element2[0] for element2 in element1]for element1 in data]
+
+        self.tagList = [[element2[1] for element2 in element1]for element1 in data]
 
         self.tokenizer = BertTokenizer.from_pretrained(self.config['model']['bert_base_chinese'], do_lower_case=True)
-        self.sentenceList, self.tagList = sentenceList, tagList
     
     def __len__(self):
         return len(self.sentenceList)
@@ -43,7 +42,7 @@ class NERDataset(data.Dataset):
     def __getitem__(self, index):
         maxWordLen = self.config['model']['maxWordLen']
         sentence, tag = self.sentenceList[index], self.tagList[index]
-
+        #print (sentence, tag)
         originSentence = copy.deepcopy(sentence)
 
         for i in range(len(sentence)):
@@ -72,7 +71,7 @@ class NERTestDataset(data.Dataset):
         f = open(path, 'r', encoding='utf-8', errors='ignore')
         data = f.read().split('\n\n'); f.close()
 
-        self.sentenceList = [[element2 for element2 in element1.split('\n')]for element1 in data]
+        self.sentenceList = [[element2 for element2 in element1.split('\n') if len(element2) != 0]for element1 in data]
         self.tokenizer = BertTokenizer.from_pretrained(self.config['model']['bert_base_chinese'], do_lower_case=True)
     
     def __len__(self):
@@ -110,6 +109,7 @@ def pad(batch):
     #句子最大长度
     f1 = lambda x:[element[x] for element in batch]
     lenList = [len(element) for element in f1(0)]
+    if 0 in lenList: print (lenList)
     maxLen = max(lenList)
     
     f2 = lambda x, maxLen:[element[x] + [0] * (maxLen - len(element[x])) for element in batch]

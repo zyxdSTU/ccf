@@ -32,9 +32,9 @@ class Transformer_CNN(nn.Module):
         self.positionEncoding = PositionalEncoding(self.embeddingSize, dropout = 0.1)
         self.bertModel = BertModel.from_pretrained(config['model']['bert_base_chinese'])
 
-        self.layer = nn.TransformerEncoderLayer(d_model = self.embeddingSize, nhead = 6)
+        self.layer = nn.TransformerEncoderLayer(d_model = self.embeddingSize, nhead = 4)
 
-        self.encoder = nn.TransformerEncoder(self.layer, num_layers=3)
+        self.encoder = nn.TransformerEncoder(self.layer, num_layers=2)
 
         self.cnnArr = nn.ModuleList([nn.Conv2d(in_channels=1, out_channels=self.hiddenSize//self.featureLen, kernel_size=(i, self.embeddingSize))
             for i in range(2, 2+ self.featureLen)])
@@ -66,12 +66,13 @@ class Transformer_CNN(nn.Module):
             inputData = torch.cat((paddingLef,embeddings, paddingRig), 1)
             inputData = inputData.unsqueeze(1)
             outputData = cnn(inputData)
-            outputData = outputData.squeeze().transpose(1, 2)
+            outputData = outputData.squeeze(3).transpose(1, 2)
             result.append(outputData)
         
         result = torch.cat(result, 2)
         result = self.dropout(result)
         result = self.fc(result)
+        #print (result.shape)
         result = F.log_softmax(result, dim=2)
         return result
 
@@ -103,7 +104,14 @@ def transformer_cnn_train(net, trainIter, validIter, config):
     epochNum = config['model']['epochNum']
     learningRate = config['model']['learningRate']
     earlyStop = config['model']['earlyStop']
+    
+    #设置不同的学习率
     optimizer = optim.Adam(net.parameters(), lr=learningRate)
+    optimizer = optim.SGD([{'params': net.bertModel.parameters(), 'lr': learningRate*0.1},
+                       {'params': net.encoder.parameters(), 'lr': learningRate*0.1},
+                       {'params': net.cnnArr.parameters()}, 
+                       {'params': net.fc.parameters()}], lr=learningRate)
+
     criterion = nn.NLLLoss()
     earlyNumber, beforeLoss, maxScore = 0, sys.maxsize, -1
     for epoch in range(epochNum):
@@ -131,16 +139,19 @@ def transformer_cnn_train(net, trainIter, validIter, config):
         net.eval()
         validLoss, number = 0, 0
         yTrue, yPre, ySentence = [], [], []
+        net.eval()
         with torch.no_grad():
             for batchSentence, batchTag, lenList, originSentence in tqdm(validIter):
                 batchSentence = batchSentence.to(DEVICE)
                 batchTag = batchTag.to(DEVICE)
 
                 tagScores  = net(batchSentence); loss = 0
+                #print (tagScores)
                 ySentence.extend(originSentence)
                 for index, element in enumerate(lenList):
                     tagScore = tagScores[index][:element]
                     tag = batchTag[index][:element]
+                    #print (tagScore.shape, tag.shape)
                     loss +=  criterion(tagScore, tag)
                     sentence = batchSentence[index][:element]
                     yTrue.append(tag.cpu().numpy().tolist())
@@ -154,7 +165,7 @@ def transformer_cnn_train(net, trainIter, validIter, config):
         assert len(yTrue2tag) == len(yPre2tag); assert len(ySentence) == len(yTrue2tag)
 
         f2Score = f2_score(y_true=yTrue2tag, y_pred=yPre2tag, y_Sentence=ySentence, validLenPath=validLenPath)
-        
+        f1Score = f1_score(y_true=yTrue2tag, y_pred=yPre2tag)
         validLoss = validLoss / number
 
         
@@ -164,7 +175,8 @@ def transformer_cnn_train(net, trainIter, validIter, config):
 
         print ('训练损失为: %f\n' % trainLoss)
         print ('验证损失为: %f / %f\n' % (validLoss, beforeLoss))
-        print ('f1_Score: %f\n' % f2Score)
+        print ('f1_Score: %f f2_Score: %f\n' % (f1Score, f2Score))
+        #print ('f1_Score: %f \n' % f1Score)
 
         #早停机制
         if validLoss >  beforeLoss:

@@ -33,5 +33,5 @@
 
 # acquireEntity(None, None, None)
 
-str = r'n12343  '
-print (len(str.strip()))
+str = 'test\n'
+print (str.split('\n'))

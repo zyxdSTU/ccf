@@ -43,19 +43,32 @@ def stop_words(x):
         return ''
     #去除空格
     x = re.sub(r'\?+','',x)
-
-    x = re.sub(r'\{IMG:.*?\}','',x)
-
+    
+    #html标识
+    x = re.sub(r'<.*?>', '', x)
+    
+    x = re.sub(r'&ensp;|&emsp;|&nbsp;|&lt;|&gt;|&amp;|&quot;|&copy;|&reg;', '',x)
+    
+    #Imag标识和代码
+    x = re.sub(r'\{.*?\}', '', x)
+    
+    #QQ
+    x = re.sub(r'(QQ(:|：)\d+)','', x)
+    
+    #网址
     x = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', x)
+    
+    #邮箱
+    x = re.sub(r'[0-9a-zA-Z_]{0,19}@[0-9a-zA-Z]{1,13}\.[com,cn,net]{1,3}', '', x)
 
-    x = re.sub("[\w!#$%&'*+/=?^_`{|}~-]+(?:\.[\w!#$%&'*+/=?^_`{|}~-]+)*@(?:[\w](?:[\w-]*[\w])?\.)+[\w](?:[\w-]*[\w])?"
-            ,'', x)    
-
+    #电话号码
     x = re.sub("0\d{2}-\d{8}|0\d{3}-\d{7}|\d{5}-\d{5}", '', x) 
-
-    x = re.sub("(20\d{2}([\.\-/|年月\s]{1,3}\d{1,2}){2}日?(\s?\d{2}:\d{2}(:\d{2})?)?)|(\d{1,2}\s?(分钟|小时|天)前)"
-            ,'', x) 
-
+    x = re.sub('1[34578]\\d{9}', '', x)
+    
+    #日期
+    x = re.sub(r'(\d+?年)?(\d+?月)?(\d+?日)', '', x)
+    x = re.sub(r'(\d+?年)?\d+?月', '', x)
+    x = re.sub(r'\d+年', '', x)
     return x
 
 
@@ -118,22 +131,23 @@ def dataTestPrepare(inputPath, outputDataPath, outputLenPath):
 
 
     inputReader = csv.reader(input)
-    pattern = r';|\.|\?|!|；|。|？|！'
+    pattern = r';|\?|!|；|。|？|！'
 
     for item in inputReader:
         if inputReader.line_num == 1: continue
         id, title, text = item[0], item[1], item[2]
         sentenceArr, tagArr = [], []
 
-        #去除一些冗余信息
-        title = stop_words(title); text = stop_words(text)
+        if len(title) == 0: string = text
+        elif len(text) == 0: string = title
+        else: string = title +'。'+ text
 
-        #注意过滤空行
-        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) 
-            if len(element.strip()) > 0])
-        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) 
-            if len(element.strip()) > 0])
+        string = stop_words(string)
+        sentenceArr = re.split(pattern, string)
 
+        #过滤超长句子
+        sentenceArr = [element.strip() for element in sentenceArr]
+        sentenceArr = [element for element in sentenceArr if len(element) > 0 and len(element) <= 200]
         
         for sentence in sentenceArr:
             for element in sentence:
@@ -158,32 +172,28 @@ def dataPrepare(inputPath, outputPath, outputLenPath):
     outputLen = open(outputLenPath, 'w', encoding='utf-8', errors='ignore')
 
     inputReader = csv.reader(input)
-    pattern = r';|\.|\?|!|；|。|？|！'
+    pattern = r';|\?|!|；|。|？|！'
 
-    #sentenceLen = open('./data/len.txt', 'a', encoding='utf-8', errors='ignore')
     for item in inputReader:
         id, title, text = item[0], item[1], item[2]
         sentenceArr, tagArr = [], []
 
         #去除一些冗余信息
-        title = stop_words(title); text = stop_words(text)
+        if len(title) == 0: string = text
+        elif len(text) == 0: string = title
+        else: string = title +'。'+ text
 
-        #注意过滤不足10字符的句子
-        if len(title) != 0: sentenceArr.extend([element for element in re.split(pattern, title) 
-            if (len(element.strip()) > 10)])
-        if len(text) != 0: sentenceArr.extend([element for element in re.split(pattern, text) 
-            if (len(element.strip()) > 10)])
+        string = stop_words(string)
+        sentenceArr = re.split(pattern, string)
 
-        #for sentence in sentenceArr: sentenceLen.write(str(len(sentence)) + '\n')
+        #处理句子、过滤超长句子
+        sentenceArr = [element.strip() for element in sentenceArr]
+        sentenceArr = [element for element in sentenceArr if len(element) > 0 and len(element) <= 200]
 
-        #不过滤不包含实体的句子
         if len(item[3].strip()) == 0: tagArr = [['O'] * len(sentence) for sentence in sentenceArr]            
         else:
             entityArr = item[3].split(';')
-
-            #过滤不包含实体的句子
-            #sentenceArr = [sentence for sentence in sentenceArr if contain(sentence, entityArr)]
-            
+ 
             tagArr = [sentence for sentence in sentenceArr]
             for entity in entityArr:
                 for i in  range(len(tagArr)):
@@ -207,8 +217,7 @@ def dataPrepare(inputPath, outputPath, outputLenPath):
             output.write('\n')
 
     input.close(); output.close(); outputLen.close()
-    #sentenceLen.close()
               
-dataPrepare('./data/train.csv', './data/train.txt', './data/train.record')
-dataPrepare('./data/valid.csv', './data/valid.txt', './data/valid.record')
-dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')
+# dataPrepare('./data/train.csv', './data/train.txt', './data/train.record')
+# dataPrepare('./data/valid.csv', './data/valid.txt', './data/valid.record')
+# dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')

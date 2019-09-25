@@ -14,11 +14,10 @@ from data_loader import tagDict
 import torch
 import sys
 import csv
-
 from bilstm_crf import bilstm_crf_train
 from bilstm_crf import bilstm_crf_test
 from bilstm_crf import BiLSTM_CRF
-
+from random import random
 from transformer_cnn import Transformer_CNN
 from transformer_cnn import transformer_cnn_train
 from transformer_cnn import transformer_cnn_test
@@ -39,21 +38,22 @@ def main(config):
     trainIter = data.DataLoader(dataset = trianDataset,
                                  batch_size = batchSize,
                                  shuffle = True,
-                                 num_workers = 4,
+                                 num_workers = 6,
                                  collate_fn = pad)
 
     validIter = data.DataLoader(dataset = validDataset,
                                  batch_size = batchSize,
                                  shuffle = False,
-                                 num_workers = 4,
+                                 num_workers = 6,
                                  collate_fn = pad)
     
     testIter = data.DataLoader(dataset = testDataset,
                                  batch_size = batchSize,
                                  shuffle = False,
-                                 num_workers = 4,
+                                 num_workers = 6,
                                  collate_fn = testPad)
 
+    
     if config['modelName'] == 'bilstm_crf':
         net = BiLSTM_CRF(config)
         config['modelSavePath'] = config['data']['BiLSTMCRFSavePath']
@@ -76,8 +76,8 @@ def main(config):
 
     net = net.to(DEVICE)
 
-    if os.path.exists(modelSavePath):
-        net.load_state_dict(torch.load(modelSavePath))
+    # if os.path.exists(modelSavePath):
+    #     net.load_state_dict(torch.load(modelSavePath))
 
     #if config['train']: 
     train(net, trainIter, validIter, config)
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     optParser.add_option('-m', '--model', action = 'store', type='string', dest ='modelName')
     option , args = optParser.parse_args()
     f = open('./config.yml', encoding='utf-8', errors='ignore')
-    config = yaml.load(f)
+    config = yaml.safe_load(f)
 
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     config['DEVICE'] = DEVICE
