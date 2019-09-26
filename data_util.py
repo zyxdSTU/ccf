@@ -72,23 +72,35 @@ def stop_words(x):
     return x
 
 
-def acquireEntity(sentenceArr, tagArr):
+def acquireEntity(sentenceArr, tagArr, method='BIOES'):
     entityArr, entity = [], ''
     for i in range(len(tagArr)):
         for j in range(len(tagArr[i])):
+            if method == 'BIO':
+                if tagArr[i][j] == 'B':
+                    if entity != '':entityArr.append(entity.strip()); entity = sentenceArr[i][j]
+                    else: entity += sentenceArr[i][j]
 
-            if tagArr[i][j] == 'B':
-                if entity != '':entityArr.append(entity.strip()); entity = sentenceArr[i][j]
-                else: entity += sentenceArr[i][j]
+                if tagArr[i][j] == 'I':
+                    if entity != '': entity = entity + sentenceArr[i][j]
 
-            if tagArr[i][j] == 'I':
-                if entity != '': entity = entity + sentenceArr[i][j]
+                if tagArr[i][j] == 'O':
+                    if entity != '': entityArr.append(entity.strip()); entity = ''
 
-            if tagArr[i][j] == 'O':
-                if entity != '': entityArr.append(entity.strip()); entity = ''
+                if entity != '': entityArr.append(entity.strip())
 
-    if entity != '': entityArr.append(entity.strip())
-
+            elif method == 'BIOES':
+                if tagArr[i][j] == 'S': 
+                    entity = ''; entityArr.append(sentenceArr[i][j])
+                if tagArr[i][j] == 'B': 
+                    entity = sentenceArr[i][j]
+                if tagArr[i][j] == 'I':
+                    if entity != '': entity += sentenceArr[i][j]
+                if tagArr[i][j] == 'E': 
+                    if entity != '': entity += sentenceArr[i][j]; entityArr.append(entity); entity = ''
+                if tagArr[i][j] == 'O': 
+                    if entity != '': entity = ''
+                    
     return list(set(entityArr))
 
 #剔除重复的实体
@@ -159,7 +171,7 @@ def dataTestPrepare(inputPath, outputDataPath, outputLenPath):
     input.close(); outputData.close(); outputLen.close()
 
 
-def dataPrepare(inputPath, outputPath, outputLenPath):
+def dataPrepare(inputPath, outputPath, outputLenPath, method ='BIO'):
 
     def contain(sentence, entityArr):
         for entity in entityArr:
@@ -197,13 +209,18 @@ def dataPrepare(inputPath, outputPath, outputLenPath):
             tagArr = [sentence for sentence in sentenceArr]
             for entity in entityArr:
                 for i in  range(len(tagArr)):
-                    tagArr[i] = tagArr[i].replace(entity, 'Ё' + (len(entity)-1)*'Ж')
+                    if method == 'BIO':
+                        tagArr[i] = tagArr[i].replace(entity, 'Ё' + (len(entity)-1)*'Ж')
+                    elif method == 'BIOES':
+                        tagArr[i] = tagArr[i].replace(entity, 'Ё' + (len(entity)-2) * 'Ж' + 'З') if len(entity) > 1 else tagArr[i].replace(entity, 'И')
 
             for i in range(len(tagArr)):
                 tagArr[i] = list(tagArr[i])
                 for j in range(len(tagArr[i])):
                     if tagArr[i][j] == 'Ё': tagArr[i][j] = 'B'
                     elif tagArr[i][j] == 'Ж': tagArr[i][j] = 'I'
+                    elif tagArr[i][j] == 'З': tagArr[i][j] = 'E'
+                    elif tagArr[i][j] == 'И': tagArr[i][j] = 'S'
                     else: tagArr[i][j] = 'O'
 
         assert len(sentenceArr) == len(tagArr)
@@ -218,6 +235,6 @@ def dataPrepare(inputPath, outputPath, outputLenPath):
 
     input.close(); output.close(); outputLen.close()
               
-# dataPrepare('./data/train.csv', './data/train.txt', './data/train.record')
-# dataPrepare('./data/valid.csv', './data/valid.txt', './data/valid.record')
-# dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')
+#dataPrepare('./data/train.csv', './data/train_bioes.txt', './data/train.record', method='BIOES')
+#dataPrepare('./data/valid.csv', './data/valid_bioes.txt', './data/valid.record', method='BIOES')
+#dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')

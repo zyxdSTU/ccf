@@ -107,8 +107,8 @@ def transformer_cnn_train(net, trainIter, validIter, config):
     
     #设置不同的学习率
     optimizer = optim.Adam(net.parameters(), lr=learningRate)
-    optimizer = optim.SGD([{'params': net.bertModel.parameters(), 'lr': learningRate*0.1},
-                       {'params': net.encoder.parameters(), 'lr': learningRate*0.1},
+    optimizer = optim.SGD([{'params': net.bertModel.parameters(), 'lr': learningRate /5},
+                       {'params': net.encoder.parameters(), 'lr': learningRate / 5},
                        {'params': net.cnnArr.parameters()}, 
                        {'params': net.fc.parameters()}], lr=learningRate)
 

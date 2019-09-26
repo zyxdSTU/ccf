@@ -4,8 +4,8 @@ import torch
 import copy
 from random import random
 
-tagDict = ['<PAD>', 'O', 'B', 'I']
-
+#tagDict = ['<PAD>', 'O', 'B', 'I']
+tagDict = ['<PAD>', 'B', 'I', 'E', 'S', 'O']
 
 # tagDict = tagDict = ['<PAD>', 'B-NAME', 'M-NAME', 'E-NAME', 'O', 'B-CONT', 'M-CONT', 
 #     'E-CONT', 'B-EDU', 'M-EDU', 'E-EDU', 'B-TITLE', 'M-TITLE', 'E-TITLE', 

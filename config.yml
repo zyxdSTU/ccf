@@ -1,12 +1,14 @@
 data:
-  trainDataPath: './data/train.txt'
-  validDataPath: './data/valid.txt'
+  trainDataPath: './data/train_bioes.txt'
+  validDataPath: './data/valid_bioes.txt'
   testDataPath: './data/test.txt'
   testLenPath: './data/test.record'
   validLenPath: './data/valid.record'
 
+  BiLSTMSavePath: '../ner_params/ccf_bilstm.pkl'
   BiLSTMCRFSavePath: '../ner_params/ccf_bilstmcrf.pkl'
   TransformerCNNSavePath: '../ner_params/ccf_transformercnn.pkl'
+  BiLSTMSubmitDataPath: './data/bilstm_submit.csv'
   BiLSTMCRFSubmitDataPath: './data/bilstmcrf_submit.csv'
   TransformerCNNSubmitDataPath: './data/transformercnn_submit.csv'
 
@@ -14,13 +16,13 @@ data:
 model:
   batchSize: 20
   bert_base_chinese: '../bert_base_chinese'
-  learningRate: 0.0001
+  learningRate: 0.0005
   maxWordLen: 200 #与Bert对齐，不能改变
   hiddenSize: 300
   featureLen: 6
   epochNum: 100
   earlyStop: 8 #早停机制
-  embeddingDropout: 0.5
-  lstmDropout: 0.5
+  embeddingDropout: 0.2
+  lstmDropout: 0.2
   dropout: 0.2
 

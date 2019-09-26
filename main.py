@@ -14,6 +14,9 @@ from data_loader import tagDict
 import torch
 import sys
 import csv
+from bilstm import BiLSTM
+from bilstm import bilstm_train
+from bilstm import bilstm_test
 from bilstm_crf import bilstm_crf_train
 from bilstm_crf import bilstm_crf_test
 from bilstm_crf import BiLSTM_CRF
@@ -54,6 +57,14 @@ def main(config):
                                  collate_fn = testPad)
 
     
+    if config['modelName'] == 'bilstm':
+        net = BiLSTM(config)
+        config['modelSavePath'] = config['data']['BiLSTMSavePath']
+        modelSavePath = config['modelSavePath']
+        config['submitDataPath'] = config['data']['BiLSTMSubmitDataPath']
+        train = bilstm_train
+        test = bilstm_test
+
     if config['modelName'] == 'bilstm_crf':
         net = BiLSTM_CRF(config)
         config['modelSavePath'] = config['data']['BiLSTMCRFSavePath']
@@ -76,8 +87,8 @@ def main(config):
 
     net = net.to(DEVICE)
 
-    # if os.path.exists(modelSavePath):
-    #     net.load_state_dict(torch.load(modelSavePath))
+    if os.path.exists(modelSavePath):
+        net.load_state_dict(torch.load(modelSavePath))
 
     #if config['train']: 
     train(net, trainIter, validIter, config)
