@@ -54,7 +54,12 @@ def bilstm_crf_train(net, trainIter, validIter, config):
     epochNum = config['model']['epochNum']
     learningRate = config['model']['learningRate']
     earlyStop = config['model']['earlyStop']
-    optimizer = optim.Adam(net.parameters(), lr=learningRate)
+    
+    optimizer = optim.SGD([{'params': net.bertModel.parameters(), 'lr': learningRate /5},
+                    {'params': net.lstm.parameters()},
+                    {'params': net.fc.parameters()},
+                    {'params': net.crf.parameters()}], lr=learningRate)
+
     earlyNumber, beforeLoss, maxScore = 0, sys.maxsize, -1
     for epoch in range(epochNum):
         print ('第%d次迭代\n' % (epoch+1))
@@ -102,10 +107,13 @@ def bilstm_crf_train(net, trainIter, validIter, config):
 
         yTrue2tag = [[id2tag[element2] for element2 in element1] for element1 in yTrue]
         yPre2tag = [[id2tag[element2] for element2 in element1] for element1 in yPre]
+        print (yTrue2tag[:3])
+
+        print (yPre2tag[:3])
 
         assert len(yTrue2tag) == len(yPre2tag); assert len(ySentence) == len(yTrue2tag)
 
-        f2Score = f2_score(y_true=yTrue2tag, y_pred=yPre2tag, y_Sentence=ySentence, validLenPath=validLenPath)
+        #f2Score = f2_score(y_true=yTrue2tag, y_pred=yPre2tag, y_Sentence=ySentence, validLenPath=validLenPath)
         f1Score = f1_score(y_true=yTrue2tag, y_pred=yPre2tag)
         validLoss = validLoss / number
 
@@ -160,11 +168,20 @@ def bilstm_crf_test(net, testIter, config):
 
         entityArr = acquireEntity(sentenceElement, tagElement)
 
+        
+        tokenizer = BertTokenizer.from_pretrained(config['model']['bert_base_chinese'], do_lower_case=True)
+
         def filter_word(w):
-            for wbad in ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
-                    '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',','.','——', '“', '”', '！', ' ']:
-                if wbad in w:
+            import string
+            errorList = ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
+                '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',','.','——', 
+                '“', '”', '！', '…', '❶ ','❗️️', '❸','💰','✊', '﻿', '💥', '🌺', '🍀', '➕','❾',
+                '😘', '⬇️', '🏦', '☟', '👆', '', '💪', '💡', '🌏', '💚', '💙', '💛']
+
+            for word in w:
+                if word not in  string.ascii_letters and word not in tokenizer.vocab.keys():
                     return ''
+                if word == ' ' or word in errorList: return ''
             return w
 
         #过滤一些无用实体

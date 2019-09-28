@@ -1,11 +1,13 @@
 import csv
-import random
+from random import random
+from random import shuffle
 import re
 import copy
 from pytorch_pretrained_bert import BertTokenizer
 import torch
 import copy
 from data_loader import id2tag
+import pandas as pd
 
 def cutData(originPath, trainPath, validPath, scale=0.9):
 
@@ -52,23 +54,12 @@ def stop_words(x):
     #Imag标识和代码
     x = re.sub(r'\{.*?\}', '', x)
     
-    #QQ
-    x = re.sub(r'(QQ(:|：)\d+)','', x)
-    
     #网址
     x = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', x)
     
-    #邮箱
-    x = re.sub(r'[0-9a-zA-Z_]{0,19}@[0-9a-zA-Z]{1,13}\.[com,cn,net]{1,3}', '', x)
+    #去除空格
+    x = x.replace(' ', '')
 
-    #电话号码
-    x = re.sub("0\d{2}-\d{8}|0\d{3}-\d{7}|\d{5}-\d{5}", '', x) 
-    x = re.sub('1[34578]\\d{9}', '', x)
-    
-    #日期
-    x = re.sub(r'(\d+?年)?(\d+?月)?(\d+?日)', '', x)
-    x = re.sub(r'(\d+?年)?\d+?月', '', x)
-    x = re.sub(r'\d+年', '', x)
     return x
 
 
@@ -100,7 +91,7 @@ def acquireEntity(sentenceArr, tagArr, method='BIOES'):
                     if entity != '': entity += sentenceArr[i][j]; entityArr.append(entity); entity = ''
                 if tagArr[i][j] == 'O': 
                     if entity != '': entity = ''
-                    
+    entityArr = [entity.strip() for entity in entityArr]
     return list(set(entityArr))
 
 #剔除重复的实体
@@ -135,7 +126,7 @@ def f2_score(y_true, y_pred, y_Sentence, validLenPath):
 
 ##Test数据集需要记住每一项数据包含的文本行数
 ##Test数据集并且没有标签
-def dataTestPrepare(inputPath, outputDataPath, outputLenPath):
+def dataTestPrepare(TrainDataPath, inputPath, outputDataPath, outputLenPath):
 
     input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
     outputData = open(outputDataPath, 'w', encoding='utf-8', errors='ignore')
@@ -171,7 +162,7 @@ def dataTestPrepare(inputPath, outputDataPath, outputLenPath):
     input.close(); outputData.close(); outputLen.close()
 
 
-def dataPrepare(inputPath, outputPath, outputLenPath, method ='BIO'):
+def dataPrepare(inputPath, trainPath, validPath,  method ='BIOES', portion = 0.9):
 
     def contain(sentence, entityArr):
         for entity in entityArr:
@@ -179,18 +170,18 @@ def dataPrepare(inputPath, outputPath, outputLenPath, method ='BIO'):
         return False
 
     input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
-    output = open(outputPath, 'w', encoding='utf-8', errors='ignore')
-
-    outputLen = open(outputLenPath, 'w', encoding='utf-8', errors='ignore')
+    trainOutput = open(trainPath, 'w', encoding='utf-8', errors='ignore')
+    validOutput = open(validPath, 'w', encoding='utf-8', errors='ignore')
 
     inputReader = csv.reader(input)
     pattern = r';|\?|!|；|。|？|！'
 
+    sentenceArrTotal, tagArrTotal = [], []
     for item in inputReader:
+        if inputReader.line_num == 1: continue
         id, title, text = item[0], item[1], item[2]
         sentenceArr, tagArr = [], []
 
-        #去除一些冗余信息
         if len(title) == 0: string = text
         elif len(text) == 0: string = title
         else: string = title +'。'+ text
@@ -199,13 +190,14 @@ def dataPrepare(inputPath, outputPath, outputLenPath, method ='BIO'):
         sentenceArr = re.split(pattern, string)
 
         #处理句子、过滤超长句子
-        sentenceArr = [element.strip() for element in sentenceArr]
         sentenceArr = [element for element in sentenceArr if len(element) > 0 and len(element) <= 200]
 
         if len(item[3].strip()) == 0: tagArr = [['O'] * len(sentence) for sentence in sentenceArr]            
         else:
+            #实体按长度排序
             entityArr = item[3].split(';')
- 
+            entityArr = sorted(entityArr,key = lambda i:len(i),reverse=True) 
+
             tagArr = [sentence for sentence in sentenceArr]
             for entity in entityArr:
                 for i in  range(len(tagArr)):
@@ -224,17 +216,38 @@ def dataPrepare(inputPath, outputPath, outputLenPath, method ='BIO'):
                     else: tagArr[i][j] = 'O'
 
         assert len(sentenceArr) == len(tagArr)
+        
+        sentenceArrTotal.extend(sentenceArr); tagArrTotal.extend(tagArr)
 
-        outputLen.write(id + '\t' + str(len(sentenceArr)) + '\n')
+    #随机去除不包含实体的句子
+    sentenceArrTemp, tagArrTemp = [], []
+    for sentence, tag in zip(sentenceArrTotal, tagArrTotal):
+        assert len(sentence) == len(tag)
+        if ''.join(list(set(tag))) == 'O' and random() < 0.5: continue
+        sentenceArrTemp.append(sentence); tagArrTemp.append(tag)
+    sentenceArrTotal, tagArrTotal = sentenceArrTemp, tagArrTemp
 
-        for sentence, tag in zip(sentenceArr, tagArr):
-            assert len(sentence) == len(tag)
-            for element1, element2 in zip(sentence, tag):
-                output.write(element1 + '\t' + element2 + '\n')
-            output.write('\n')
+    data = [(sentence, tag) for sentence, tag in zip(sentenceArrTotal, tagArrTotal)]
+    #print (len(data))
+    shuffle(data)
 
-    input.close(); output.close(); outputLen.close()
+    trainData = data[:int(len(data) * portion)]
+    validData = data[int(len(data)* portion):]
+
+    for element in trainData:
+        for word, tag in zip(element[0], element[1]):
+            trainOutput.write(word + '\t' + tag + '\n')
+        trainOutput.write('\n')
+
+    for element in validData:
+        for word, tag in zip(element[0], element[1]):
+            validOutput.write(word + '\t' + tag + '\n')
+        validOutput.write('\n')
+
+    input.close(); trainOutput.close(); validOutput.close()
+    
               
-#dataPrepare('./data/train.csv', './data/train_bioes.txt', './data/train.record', method='BIOES')
-#dataPrepare('./data/valid.csv', './data/valid_bioes.txt', './data/valid.record', method='BIOES')
+dataPrepare('./data/Train_Data.csv', './data/train_random.txt', './data/valid_random.txt',method='BIOES', portion=0.9)
+
+#dataPrepare('./data/Train_Data.csv', './data/valid.csv', './data/valid_bioes_fix.txt', './data/valid.record', method='BIOES')
 #dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')

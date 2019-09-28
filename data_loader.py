@@ -4,7 +4,7 @@ import torch
 import copy
 from random import random
 
-#tagDict = ['<PAD>', 'O', 'B', 'I']
+# #tagDict = ['<PAD>', 'O', 'B', 'I']
 tagDict = ['<PAD>', 'B', 'I', 'E', 'S', 'O']
 
 # tagDict = tagDict = ['<PAD>', 'B-NAME', 'M-NAME', 'E-NAME', 'O', 'B-CONT', 'M-CONT', 
@@ -28,7 +28,7 @@ class NERDataset(data.Dataset):
 
         data = [[(element2.split('\t')[0], element2.split('\t')[1])
             for element2 in element1.split('\n') if len(element2) != 0]
-            for element1 in data if len(element1) != 0]
+            for element1 in data if len(element1) != 0 ]
 
         self.sentenceList = [[element2[0] for element2 in element1]for element1 in data]
 
@@ -42,6 +42,8 @@ class NERDataset(data.Dataset):
     def __getitem__(self, index):
         maxWordLen = self.config['model']['maxWordLen']
         sentence, tag = self.sentenceList[index], self.tagList[index]
+        # print (sentence)
+        # print (tag)
         #print (sentence, tag)
         originSentence = copy.deepcopy(sentence)
 
@@ -50,6 +52,7 @@ class NERDataset(data.Dataset):
                 sentence[i] = self.tokenizer.vocab[sentence[i]]
             else: sentence[i] = self.tokenizer.vocab['[UNK]']
 
+        #print (tag)
         tag = [tag2id[element] for element in tag]
 
         assert len(sentence) == len(tag)

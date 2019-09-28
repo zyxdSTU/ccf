@@ -108,14 +108,14 @@ def transformer_cnn_train(net, trainIter, validIter, config):
     epochNum = config['model']['epochNum']
     learningRate = config['model']['learningRate']
     earlyStop = config['model']['earlyStop']
-    
+    regularization = config['model']['regularization']
     #设置不同的学习率
-    optimizer = optim.Adam(net.parameters(), lr=learningRate)
+    #optimizer = optim.Adam(net.parameters(), lr=learningRate)
     optimizer = optim.SGD([{'params': net.bertModel.parameters(), 'lr': learningRate*0.1},
                        {'params': net.encoder.parameters(), 'lr': learningRate*0.1},
                        {'params': net.cnnArr.parameters()}, 
                        {'params': net.fc.parameters()},
-                       {'params': net.crf.parameters()}], lr=learningRate)
+                       {'params': net.crf.parameters()}], lr=learningRate, weight_decay=regularization)
 
     earlyNumber, beforeLoss, maxScore = 0, sys.maxsize, -1
     for epoch in range(epochNum):

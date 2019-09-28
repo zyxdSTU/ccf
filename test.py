@@ -33,5 +33,23 @@
 
 # acquireEntity(None, None, None)
 
+# data = [(sentence, tag) for sentence, tag in zip(sentenceList, tagList)]
+#     random.shuffle(data)
+
+#     trainData = data[:int(len(data) * portion)]
+#     validData = data[int(len(data)* portion):]
+
+#     for element in trainData:
+#         for word, tag in zip(element[0], element[1]):
+#             outputTrain.write(word + '\t' + tag + '\n')
+#         outputTrain.write('\n')
+
+#     for element in validData:
+#         for word, tag in zip(element[0], element[1]):
+#             outputValid.write(word + '\t' + tag + '\n')
+#         outputValid.write('\n')
+#     outputTrain.close(); outputValid.close()
+
 str = 'test\n'
 print (str.split('\n'))
+

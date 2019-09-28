@@ -149,16 +149,23 @@ def bilstm_test(net, testIter, config):
 
         entityArr = acquireEntity(sentenceElement, tagElement, method='BIOES')
 
+        tokenizer = BertTokenizer.from_pretrained(config['model']['bert_base_chinese'], do_lower_case=True)
+
         def filter_word(w):
-            for wbad in ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
-                    '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',','.','——', '“', '”', '！', ' ']:
-                if wbad in w:
+            import string
+            errorList = ['？','《','🔺','️?','!','#','%','%','，','Ⅲ','》','丨','、','）','（','​',
+                '👍','。','😎','/','】','-','⚠️','：','✅','㊙️','“',')','(','！','🔥',',','.','——', 
+                '“', '”', '！', '…', '❶ ','❗️️', '❸','💰','✊', '﻿', '💥', '🌺', '🍀', '➕','❾',
+                '😘', '⬇️', '🏦', '☟', '👆', '', '💪', '💡', '🌏', '💚', '💙', '💛']
+
+            for word in w:
+                if word not in  string.ascii_letters and word not in tokenizer.vocab.keys():
                     return ''
+                if word == ' ' or word in errorList: return ''
             return w
 
         #过滤一些无用实体
         entityArr = [entity for entity in entityArr if filter_word(entity) != '' and len(entity) > 1]
-
 
         submitData.write('%s,%s\n' % (id, ';'.join(entityArr)))
 
