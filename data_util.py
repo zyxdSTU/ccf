@@ -174,7 +174,7 @@ def dataPrepare(inputPath, trainPath, validPath,  method ='BIOES', portion = 0.9
     validOutput = open(validPath, 'w', encoding='utf-8', errors='ignore')
 
     inputReader = csv.reader(input)
-    pattern = r';|\?|!|；|。|？|！'
+    pattern = r';|\?|!|；|。|？|！|,|，'
 
     sentenceArrTotal, tagArrTotal = [], []
     for item in inputReader:
@@ -190,7 +190,16 @@ def dataPrepare(inputPath, trainPath, validPath,  method ='BIOES', portion = 0.9
         sentenceArr = re.split(pattern, string)
 
         #处理句子、过滤超长句子
-        sentenceArr = [element for element in sentenceArr if len(element) > 0 and len(element) <= 200]
+        sentenceArr = [element for element in sentenceArr if len(element) > 5 and len(element) <= 200]
+
+        #如果文本过长，只取开始0.25和结束0.25
+        print (len(sentenceArr))
+        if len(sentenceArr) >= 50:
+            span = int(len(sentenceArr) * 0.25)
+            temp = []; temp.extend(sentenceArr[:span]); 
+            temp.extend(sentenceArr[len(sentenceArr)-span:len(sentenceArr)])
+            sentenceArr = temp
+            print('ok', len(sentenceArr))
 
         if len(item[3].strip()) == 0: tagArr = [['O'] * len(sentence) for sentence in sentenceArr]            
         else:
@@ -220,12 +229,12 @@ def dataPrepare(inputPath, trainPath, validPath,  method ='BIOES', portion = 0.9
         sentenceArrTotal.extend(sentenceArr); tagArrTotal.extend(tagArr)
 
     #随机去除不包含实体的句子
-    sentenceArrTemp, tagArrTemp = [], []
-    for sentence, tag in zip(sentenceArrTotal, tagArrTotal):
-        assert len(sentence) == len(tag)
-        if ''.join(list(set(tag))) == 'O' and random() < 0.5: continue
-        sentenceArrTemp.append(sentence); tagArrTemp.append(tag)
-    sentenceArrTotal, tagArrTotal = sentenceArrTemp, tagArrTemp
+    # sentenceArrTemp, tagArrTemp = [], []
+    # for sentence, tag in zip(sentenceArrTotal, tagArrTotal):
+    #     assert len(sentence) == len(tag)
+    #     if ''.join(list(set(tag))) == 'O' and random() > 0.8: continue
+    #     sentenceArrTemp.append(sentence); tagArrTemp.append(tag)
+    # sentenceArrTotal, tagArrTotal = sentenceArrTemp, tagArrTemp
 
     data = [(sentence, tag) for sentence, tag in zip(sentenceArrTotal, tagArrTotal)]
     #print (len(data))
@@ -239,7 +248,7 @@ def dataPrepare(inputPath, trainPath, validPath,  method ='BIOES', portion = 0.9
             trainOutput.write(word + '\t' + tag + '\n')
         trainOutput.write('\n')
 
-    for element in validData:
+    for element in validData: 
         for word, tag in zip(element[0], element[1]):
             validOutput.write(word + '\t' + tag + '\n')
         validOutput.write('\n')
@@ -247,7 +256,7 @@ def dataPrepare(inputPath, trainPath, validPath,  method ='BIOES', portion = 0.9
     input.close(); trainOutput.close(); validOutput.close()
     
               
-dataPrepare('./data/Train_Data.csv', './data/train_random.txt', './data/valid_random.txt',method='BIOES', portion=0.9)
+#dataPrepare('./data/Train_Data.csv', './data/train_center.txt', './data/valid_center.txt',method='BIOES', portion=0.9)
 
 #dataPrepare('./data/Train_Data.csv', './data/valid.csv', './data/valid_bioes_fix.txt', './data/valid.record', method='BIOES')
 #dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')

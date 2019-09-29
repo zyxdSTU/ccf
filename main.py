@@ -91,7 +91,7 @@ def main(config):
         net.load_state_dict(torch.load(modelSavePath))
 
     #if config['train']: 
-    train(net, trainIter, validIter, config)
+    #train(net, trainIter, validIter, config)
 
     #if config['test']: 
     test(net,testIter, config)
