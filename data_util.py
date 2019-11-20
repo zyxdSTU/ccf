@@ -5,45 +5,33 @@ import re
 import copy
 from pytorch_pretrained_bert import BertTokenizer
 import torch
-import copy
-from data_loader import id2tag
+from zhon.hanzi import punctuation
 import pandas as pd
 
-def cutData(originPath, trainPath, validPath, scale=0.9):
+#找到一些非法字符
+def findIllegalWord(trainDataPath, testDataPath):
+    import string
+    additional_chars = set()
+    trainDF = pd.read_csv(trainDataPath)
+    testDF = pd.read_csv(testDataPath)
+    trainDF['text'] =  trainDF['title'].fillna('') + trainDF['text'].fillna('')
+    testDF['text'] =  testDF['title'].fillna('') + testDF['text'].fillna('')
+    for t in list(trainDF['text']) + list(testDF['text']):
+        additional_chars.update(re.findall(u'[^\u4e00-\u9fa5a-zA-Z0-9\*]', t))
+    extra_chars = set(punctuation + string.punctuation)
+    additional_chars = additional_chars.difference(extra_chars)
+    return additional_chars
 
-    origin = open(originPath, 'r', encoding='utf-8', errors='ignore')
-    train = open(trainPath, 'w', encoding='utf-8', errors='ignore')
-    valid = open(validPath, 'w', encoding='utf-8', errors='ignore')
+ilegalWordSet = findIllegalWord('./data/Train_Data.csv', './data/Test_Data.csv')
 
-    originReader = csv.reader(origin)
-    trainWriter = csv.writer(train)
-    validWriter = csv.writer(valid)
-    
-    #去除首行
-    total = list(originReader)[1:]
-
-    order = list(range(len(total)))
-    random.shuffle(order)
-
-    trainData = [total[order[index]] for index in order[:int(scale*len(total))]]
-    validData = [total[order[index]] for index in order[int(scale*len(total)):]]
-    
-    for element in trainData:
-        trainWriter.writerow(element)
-    
-    for element in validData:
-        validWriter.writerow(element)
-
-    origin.close(); train.close(); valid.close()
-
-#cutData('./data/Train_Data.csv', './data/train.csv', './data/valid.csv')
-
-def stop_words(x):
+#去除一些停用词
+def stop_words(x, illegalWordSet):
+    import string
     try:
         x = x.strip()
     except:
         return ''
-    #去除空格
+    #去除?????
     x = re.sub(r'\?+','',x)
     
     #html标识
@@ -57,84 +45,53 @@ def stop_words(x):
     #网址
     x = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', x)
     
+    #去除特殊字符
+    x = re.sub(r"\t|\n|\b|\xa0|\x0b|\x1c|\x1d|\x1e|\xe2\x80\x8b|\xe2\x80\x8c|\xe2\x80\x8d|\u200B|‼️​", "", x)
+
     #去除空格
     x = x.replace(' ', '')
+
+    for word in illegalWordSet:
+        x.replace(word, '')
 
     return x
 
 
-def acquireEntity(sentenceArr, tagArr, method='BIOES'):
-    entityArr, entity = [], ''
-    for i in range(len(tagArr)):
-        for j in range(len(tagArr[i])):
-            if method == 'BIO':
-                if tagArr[i][j] == 'B':
-                    if entity != '':entityArr.append(entity.strip()); entity = sentenceArr[i][j]
-                    else: entity += sentenceArr[i][j]
+#拆分一行句子
+def disposeLine(string, minLen = 5, maxLen=200):
+    #去除停用词等
+    string = stop_words(string, illegalWordSet=ilegalWordSet)
 
-                if tagArr[i][j] == 'I':
-                    if entity != '': entity = entity + sentenceArr[i][j]
+    #分句
+    pattern = r';|\?|!|；|。|？|！'
+    sentenceArr = re.split(pattern, string)
 
-                if tagArr[i][j] == 'O':
-                    if entity != '': entityArr.append(entity.strip()); entity = ''
+    #合并短句子
+    temp, tempArr = "", []
+    for element in sentenceArr:
+        if len(temp) + len(element) <= maxLen:
+            temp = element if len(temp)==0 else temp+ '。' + element
+        else: 
+            tempArr.append(temp)
+            if len(element) > maxLen: tempArr.append(element); temp = ""
+            else: temp = element
+    if len(temp) != 0: tempArr.append(temp)
+    sentenceArr = tempArr
 
-                if entity != '': entityArr.append(entity.strip())
+    #处理短句子和超长句子
+    sentenceArr = [element.strip() for element in sentenceArr if len(element.strip()) >= minLen]
+    sentenceArr = [element if len(element) <= maxLen else element[:maxLen] for element in sentenceArr]
 
-            elif method == 'BIOES':
-                if tagArr[i][j] == 'S': 
-                    entity = ''; entityArr.append(sentenceArr[i][j])
-                if tagArr[i][j] == 'B': 
-                    entity = sentenceArr[i][j]
-                if tagArr[i][j] == 'I':
-                    if entity != '': entity += sentenceArr[i][j]
-                if tagArr[i][j] == 'E': 
-                    if entity != '': entity += sentenceArr[i][j]; entityArr.append(entity); entity = ''
-                if tagArr[i][j] == 'O': 
-                    if entity != '': entity = ''
-    entityArr = [entity.strip() for entity in entityArr]
-    return list(set(entityArr))
+    return sentenceArr
 
-#剔除重复的实体
-def f2_score(y_true, y_pred, y_Sentence, validLenPath):
-    validLen = open(validLenPath, 'r', encoding='utf-8', errors='ignore')
-    start = 0
-    TP, FP, FN = 0, 0, 0
-    for line in validLen.readlines():
-        id, length = line.strip('\n').split('\t')[0], int(line.strip('\n').split('\t')[1])
-        trueEntity = acquireEntity(y_Sentence[start:start+length], y_true[start:start+length])
-        predEntity = acquireEntity(y_Sentence[start:start+length], y_pred[start:start+length])
-        start = start + length
+#使用BIOES标注方法标注测试集，outputLen用于生成提交文件，说明参考util.py中generateResult函数
+def dataTestPrepare(inputDataPath, outputDataPath, outputLenPath):
 
-        TPE, FPE, FNE = 0, 0, 0
-        for entity in predEntity:
-            if entity in trueEntity: TPE += 1
-            else: FPE += 1
-        FNE = len(trueEntity) - TPE
-        TP += TPE; FP += FPE; FN += FNE
-    
-    if TP + FP == 0 or TP + FN == 0: return 0
-
-    MicroP = TP / (TP + FP); MicroR = TP / (TP + FN)
-
-    if MicroP + MicroR == 0: return 0
-
-    MicroF = 2 * MicroP * MicroR / (MicroP + MicroR)
-
-    validLen.close()
-
-    return MicroF
-
-##Test数据集需要记住每一项数据包含的文本行数
-##Test数据集并且没有标签
-def dataTestPrepare(TrainDataPath, inputPath, outputDataPath, outputLenPath):
-
-    input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
-    outputData = open(outputDataPath, 'w', encoding='utf-8', errors='ignore')
+    input = open(inputDataPath, 'r', encoding='utf-8', errors='ignore')
+    output = open(outputDataPath, 'w', encoding='utf-8', errors='ignore')
     outputLen = open(outputLenPath, 'w', encoding='utf-8', errors='ignore')
 
-
     inputReader = csv.reader(input)
-    pattern = r';|\?|!|；|。|？|！'
 
     for item in inputReader:
         if inputReader.line_num == 1: continue
@@ -145,118 +102,111 @@ def dataTestPrepare(TrainDataPath, inputPath, outputDataPath, outputLenPath):
         elif len(text) == 0: string = title
         else: string = title +'。'+ text
 
-        string = stop_words(string)
-        sentenceArr = re.split(pattern, string)
-
-        #过滤超长句子
-        sentenceArr = [element.strip() for element in sentenceArr]
-        sentenceArr = [element for element in sentenceArr if len(element) > 0 and len(element) <= 200]
+        sentenceArr = disposeLine(string)
         
         for sentence in sentenceArr:
             for element in sentence:
-                outputData.write(element + '\n')
-            outputData.write('\n')
+                output.write(element + '\n')
+            output.write('\n')
 
         outputLen.write(id + '\t' + str(len(sentenceArr)) + '\n')
         
-    input.close(); outputData.close(); outputLen.close()
+    input.close(); output.close(); outputLen.close()
 
-
-def dataPrepare(inputPath, trainPath, validPath,  method ='BIOES', portion = 0.9):
-
-    def contain(sentence, entityArr):
-        for entity in entityArr:
-            if entity in sentence: return True
-        return False
-
-    input = open(inputPath, 'r', encoding='utf-8', errors='ignore')
-    trainOutput = open(trainPath, 'w', encoding='utf-8', errors='ignore')
-    validOutput = open(validPath, 'w', encoding='utf-8', errors='ignore')
+#使用BIOES标注方法标注训练集
+def dataPrepare(inputDataPath, outputDataPath, outputLenPath, method ='BIOES'):
+    input = open(inputDataPath, 'r', encoding='utf-8', errors='ignore')
+    output = open(outputDataPath, 'w', encoding='utf-8', errors='ignore')
+    outputLen = open(outputLenPath, 'w', encoding='utf-8', errors='ignore')
 
     inputReader = csv.reader(input)
-    pattern = r';|\?|!|；|。|？|！|,|，'
 
     sentenceArrTotal, tagArrTotal = [], []
     for item in inputReader:
+        #过滤第一行列名
         if inputReader.line_num == 1: continue
         id, title, text = item[0], item[1], item[2]
+
+        #实体按长度排序，并且过滤掉不包含实体的列
+        if item[3] != '':
+            entityArr = item[3].split(';')
+            entityArr = [element for element in entityArr if len(element) > 1]
+            entityArr = sorted(entityArr,key = lambda i:len(i),reverse=True)
+        else: continue 
+
         sentenceArr, tagArr = [], []
 
         if len(title) == 0: string = text
         elif len(text) == 0: string = title
         else: string = title +'。'+ text
 
-        string = stop_words(string)
-        sentenceArr = re.split(pattern, string)
+        #切分文本为多个句子
+        sentenceArr = disposeLine(string)
 
-        #处理句子、过滤超长句子
-        sentenceArr = [element for element in sentenceArr if len(element) > 5 and len(element) <= 200]
+        tagArr = [sentence for sentence in sentenceArr]
+        for entity in entityArr:
+            for i in  range(len(tagArr)):
+                if method == 'BIO':
+                    tagArr[i] = tagArr[i].replace(entity, 'Ё' + (len(entity)-1)*'Ж')
+                elif method == 'BIOES':
+                    tagArr[i] = tagArr[i].replace(entity, 'Ё' + (len(entity)-2) * 'Ж' + 'З') if len(entity) > 1 else tagArr[i].replace(entity, 'И')
 
-        #如果文本过长，只取开始0.25和结束0.25
-        print (len(sentenceArr))
-        if len(sentenceArr) >= 50:
-            span = int(len(sentenceArr) * 0.25)
-            temp = []; temp.extend(sentenceArr[:span]); 
-            temp.extend(sentenceArr[len(sentenceArr)-span:len(sentenceArr)])
-            sentenceArr = temp
-            print('ok', len(sentenceArr))
-
-        if len(item[3].strip()) == 0: tagArr = [['O'] * len(sentence) for sentence in sentenceArr]            
-        else:
-            #实体按长度排序
-            entityArr = item[3].split(';')
-            entityArr = sorted(entityArr,key = lambda i:len(i),reverse=True) 
-
-            tagArr = [sentence for sentence in sentenceArr]
-            for entity in entityArr:
-                for i in  range(len(tagArr)):
-                    if method == 'BIO':
-                        tagArr[i] = tagArr[i].replace(entity, 'Ё' + (len(entity)-1)*'Ж')
-                    elif method == 'BIOES':
-                        tagArr[i] = tagArr[i].replace(entity, 'Ё' + (len(entity)-2) * 'Ж' + 'З') if len(entity) > 1 else tagArr[i].replace(entity, 'И')
-
-            for i in range(len(tagArr)):
-                tagArr[i] = list(tagArr[i])
-                for j in range(len(tagArr[i])):
-                    if tagArr[i][j] == 'Ё': tagArr[i][j] = 'B'
-                    elif tagArr[i][j] == 'Ж': tagArr[i][j] = 'I'
-                    elif tagArr[i][j] == 'З': tagArr[i][j] = 'E'
-                    elif tagArr[i][j] == 'И': tagArr[i][j] = 'S'
-                    else: tagArr[i][j] = 'O'
+        for i in range(len(tagArr)):
+            tagArr[i] = list(tagArr[i])
+            for j in range(len(tagArr[i])):
+                if tagArr[i][j] == 'Ё': tagArr[i][j] = 'B'
+                elif tagArr[i][j] == 'Ж': tagArr[i][j] = 'I'
+                elif tagArr[i][j] == 'З': tagArr[i][j] = 'E'
+                elif tagArr[i][j] == 'И': tagArr[i][j] = 'S'
+                else: tagArr[i][j] = 'O'
 
         assert len(sentenceArr) == len(tagArr)
         
-        sentenceArrTotal.extend(sentenceArr); tagArrTotal.extend(tagArr)
+        for sentence, tag in zip(sentenceArr, tagArr):
+            for element1, element2 in zip(sentence, tag):
+                output.write(element1 + '\t' + element2 + '\n')
+            output.write('\n')
 
-    #随机去除不包含实体的句子
-    # sentenceArrTemp, tagArrTemp = [], []
-    # for sentence, tag in zip(sentenceArrTotal, tagArrTotal):
-    #     assert len(sentence) == len(tag)
-    #     if ''.join(list(set(tag))) == 'O' and random() > 0.8: continue
-    #     sentenceArrTemp.append(sentence); tagArrTemp.append(tag)
-    # sentenceArrTotal, tagArrTotal = sentenceArrTemp, tagArrTemp
+        #加上真实实体
+        outputLen.write(id + '\t' + str(len(sentenceArr)) + '\t' + item[3] +'\n')
 
-    data = [(sentence, tag) for sentence, tag in zip(sentenceArrTotal, tagArrTotal)]
-    #print (len(data))
+    input.close(); output.close(); outputLen.close()
+
+
+import os
+
+def cutData(dataPath, saveDir, fold=5):
+    totalPath = os.path.join(saveDir, 'total.txt')
+    totalLenPath = os.path.join(saveDir, 'total.len')
+    dataPrepare(dataPath, totalPath, totalLenPath)
+    f = open(totalPath, 'r', encoding='utf-8', errors='ignore')
+    data = f.read().split('\n\n'); f.close()
+    data = [[(element2.split('\t')[0], element2.split('\t')[1])
+            for element2 in element1.split('\n') if len(element2) != 0]
+            for element1 in data if len(element1.strip('\n')) != 0 ]
+
+    sentenceList = [[element2[0] for element2 in element1]for element1 in data]
+    tagList = [[element2[1] for element2 in element1]for element1 in data]
+
+    data = [(sentence, tag) for sentence, tag in zip(sentenceList, tagList)]
+
+    #shuffle数据
     shuffle(data)
 
-    trainData = data[:int(len(data) * portion)]
-    validData = data[int(len(data)* portion):]
+    length = len(data) #文件行数
+    perLength = length // fold if length % fold == 0 else  length // fold + 1
+    start, end = 0, 0
+    for i in range(fold):
+        end = start + perLength
+        end = end if end <= length else length
+        path = os.path.join(saveDir, '%d.txt' % i)
+        f = open(path, 'w', encoding='utf-8', errors='ignore')
+        for sentence, tag in data[start: end]:
+            for element1, element2 in zip(sentence, tag):
+                f.write(element1 + '\t' + element2 + '\n')
+            f.write('\n')
+        f.close()
+        start = end 
 
-    for element in trainData:
-        for word, tag in zip(element[0], element[1]):
-            trainOutput.write(word + '\t' + tag + '\n')
-        trainOutput.write('\n')
-
-    for element in validData: 
-        for word, tag in zip(element[0], element[1]):
-            validOutput.write(word + '\t' + tag + '\n')
-        validOutput.write('\n')
-
-    input.close(); trainOutput.close(); validOutput.close()
-    
-              
-#dataPrepare('./data/Train_Data.csv', './data/train_center.txt', './data/valid_center.txt',method='BIOES', portion=0.9)
-
-#dataPrepare('./data/Train_Data.csv', './data/valid.csv', './data/valid_bioes_fix.txt', './data/valid.record', method='BIOES')
-#dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.record')
+# dataTestPrepare('./data/Test_Data.csv', './data/test.txt', './data/test.len')
+# cutData('./data/Train_Data.csv', './data/5-fold')
